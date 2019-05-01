@@ -66,19 +66,9 @@ def render(board: list, moves: list):
         frm_piece = board[frm_row][frm_col]
         to_piece = board[to_row][to_col]
 
-        if l == 5:
-            """print(f"piece:{grps[0]}, from:{grps[1]}, to:{grps[3]}")"""
-            board[to_row][to_col] = board[frm_row][frm_col]
-            board[frm_row][frm_col] = ''
-        elif l == 6:
-            """TODO: need to do a check for x or + in here to determine if it's a check or a take""" 
-            print(f"piece:{grps[0]}, from:{grps[1]}, to:{grps[3]}, take:{grps[2]}, check[mate]:{grps[4]}")
-        elif l == 7:
-            print(f"piece:{grps[0]}, from:{grps[1]}, to:{grps[3]}, take:{grps[2]}, check[mate]:{grps[4]}")
-        else:
-            print('could not parse play')
+        board[to_row][to_col] = board[frm_row][frm_col]
+        board[frm_row][frm_col] = ''
 
-    """reverse board for rendering - .reverse() reverses the values in place"""
     for row in board[::-1]:
         for cell in row:
             if len(cell) > 0:
@@ -91,7 +81,7 @@ def render(board: list, moves: list):
         print('')
 
 def parse_play(play: str, board: list):
-    comp = re.compile('([1-9]+)\.\s+([KQBNRP][^ ]+)\s*')
+    comp = re.compile('([1-9]+)\.\s+([KQBNRP]?[^ ]+)\s*')
     moves = comp.findall(play)
     render(board, moves)
 
