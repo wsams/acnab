@@ -80,6 +80,7 @@ $html = <<<eof
 </table>
 <br>
 <textarea class="form-control" id="moves">1. a2a4 2. Ph7h5</textarea>
+<br>
 <div class="container">
 <pre>
     Rules
