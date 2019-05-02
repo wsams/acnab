@@ -1,2 +1,9 @@
 # acnab
+
 A Python script for rendering an ascii chessboard using abbreviated algebraic chess notation.
+
+# Usage
+
+```
+python3 chess.py '1. Pf2f4 2. Nb8c6'
+```

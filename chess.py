@@ -9,7 +9,7 @@
     Checkmate with a pound sign, you can also combine with a take: Qd2d8#
 """
 
-import re
+import re, sys
 from curses.ascii import islower, isupper, isalpha, isblank
 
 r8 = [ 'R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R' ]
@@ -80,10 +80,10 @@ def render(board: list, moves: list):
                 print(f" {black_back}-{reset_color}", end='')
         print('')
 
-def parse_play(play: str, board: list):
+def parse_play(play: str):
     comp = re.compile('([1-9]+)\.\s+([KQBNRP]?[^ ]+)\s*')
-    moves = comp.findall(play)
-    render(board, moves)
+    return comp.findall(play)
 
-play = '1. Pf2f4 2. Nb8c6'
-parse_play(play, board)
+"""play = '1. Pf2f4 2. Nb8c6'"""
+moves = parse_play(sys.argv[1])
+render(board, moves)
