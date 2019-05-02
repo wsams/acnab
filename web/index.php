@@ -2,13 +2,13 @@
 ini_set('display_errors', 1);
 
 if (isset($_POST['a'])) {
-	$a = $_POST['a'];
-	if ($a === 'save') {
+    $a = $_POST['a'];
+    if ($a === 'save') {
         $command = escapeshellcmd("./chess.py '{$_POST['moves']}'");
         $board = shell_exec($command);
-		die(json_encode(array('status' => 'ok', 'board' => $board)));
-	}
-	die(json_encode(array('status' => 'unknown')));
+        die(json_encode(array('status' => 'ok', 'board' => $board)));
+    }
+    die(json_encode(array('status' => 'unknown')));
 }
 
 $command = escapeshellcmd("./chess.py '1. a2a4 2. Ph7h5'");
@@ -56,9 +56,9 @@ $html = <<<eof
         #moves {
 
         }
-		body {
-			background-color:#606060;
-		}
+        body {
+            background-color:#606060;
+        }
     </style>
 </head>
 <body>
@@ -84,35 +84,35 @@ $html = <<<eof
         crossorigin="anonymous"></script>
     <script type="text/javascript">
         FastClick.attach(document.body);
-		function debounce(func, wait, immediate) {
-			let timeout;
-			return function() {
-				const context = this, args = arguments;
-				const later = function() {
-					timeout = null;
-					if (!immediate) func.apply(context, args);
-				};
-				const callNow = immediate && !timeout;
-				clearTimeout(timeout);
-				timeout = setTimeout(later, wait);
-				if (callNow) func.apply(context, args);
-			};
-		};
+        function debounce(func, wait, immediate) {
+            let timeout;
+            return function() {
+                const context = this, args = arguments;
+                const later = function() {
+                    timeout = null;
+                    if (!immediate) func.apply(context, args);
+                };
+                const callNow = immediate && !timeout;
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+                if (callNow) func.apply(context, args);
+            };
+        };
         $(function() {
             $('#moves').focus();
             $('#moves').on('keyup', debounce(function() {
-				$.ajax({
-					type: 'POST',
-					url: 'index.php',
-					data: 'a=save&moves=' + encodeURIComponent($('#moves').val()),
-					success: function(response) {
+                $.ajax({
+                    type: 'POST',
+                    url: 'index.php',
+                    data: 'a=save&moves=' + encodeURIComponent($('#moves').val()),
+                    success: function(response) {
                         if (response.board !== null) {
                             $('#board').html(response.board);
                         }
-					},
-					dataType: 'json'
-				});
-			}, 1000));
+                    },
+                    dataType: 'json'
+                });
+            }, 1000));
         });
     </script>
     </body>
