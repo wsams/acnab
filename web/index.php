@@ -94,6 +94,7 @@ For a check, append a plus: Qa2c4+
 For a take, place an x between the squares moved: Qa2xc4
 You can also combine the two, take and check: Qa2xc4+
 Checkmate with a pound sign, you can also combine with a take: Qd2d8#</pre>
+        Powered by <a target="_blank" href="https://github.com/wsams/acnab">acnab</a>
     </div>
     <script type="text/javascript"
         src="https://code.jquery.com/jquery-2.2.3.min.js"
