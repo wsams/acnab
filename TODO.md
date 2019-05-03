@@ -1,3 +1,5 @@
 * board themes
-* validate moves
+* validate moves (some are)
 * support the full [AN](https://en.wikipedia.org/wiki/Algebraic_notation_(chess)) syntax
+* web
+    * drag and drop pieces - the moves field would update accordingly
