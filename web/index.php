@@ -4,14 +4,18 @@ ini_set('display_errors', 1);
 if (isset($_POST['a'])) {
 	$a = $_POST['a'];
 	if ($a === 'save') {
-        $command = escapeshellcmd("./chess.py '{$_POST['moves']}'");
+        $moves = preg_replace('/[^a-h1-9 \.]/', '', $_POST['moves']);
+        file_put_contents('chess.game', $moves);
+        $command = escapeshellcmd("./chess.py '{$moves}'");
         $board = shell_exec($command);
 		die(json_encode(array('status' => 'ok', 'board' => $board)));
 	}
 	die(json_encode(array('status' => 'unknown')));
 }
 
-$command = escapeshellcmd("./chess.py '1. a2a4 2. Ph7h5'");
+//$command = escapeshellcmd("./chess.py '1. a2a4 2. Ph7h5'");
+$game = file_exists('chess.game') ? file_get_contents('chess.game') : '';
+$command = escapeshellcmd("./chess.py '{$game}'");
 $board = shell_exec($command);
 
 $html = <<<eof
@@ -75,30 +79,27 @@ $html = <<<eof
 </head>
 <body>
     <div class="container">
-<table id="board">
-{$board}
-</table>
-<br>
-<textarea class="form-control" id="moves">1. a2a4 2. Ph7h5</textarea>
-<br>
-<div class="container">
-<pre>
-    Rules
-    -----
-    Example move: 1. Ka1b2
+        <table id="board">{$board}</table>
+        <br>
+        <textarea class="form-control" id="moves">{$game}</textarea>
+        <br>
+        <button id="play" class="btn btn-primary">Play</button>
+        <br>
+        <br>
+        <pre>Rules
+-----
+Example move: 1. Ka1b2
 
-    Below is a break down of the single move above. The general format is: 1. move_1 2. move_2 3. move_3 ...
+Below is a break down of the single move above. The general format is: 1. move_1 2. move_2 3. move_3 ...
 
-    (1.) is the play number. Start from 1 and increment.
-    (K) is the player - single letter uppercase: King(K), Queen(Q), Bishop(B), Knight(N), Rook(R), Pawn(P) [optional]
-    (a1) the starting square
-    (b2) the ending square
-    For a check, append a plus: Qa2c4+
-    For a take, place an x between the squares moved: Qa2xc4
-    You can also combine the two, take and check: Qa2xc4+
-    Checkmate with a pound sign, you can also combine with a take: Qd2d8#
-</pre>
-</div>
+(1.) is the play number. Start from 1 and increment.
+(K) is the player - single letter uppercase: King(K), Queen(Q), Bishop(B), Knight(N), Rook(R), Pawn(P) [optional]
+(a1) the starting square
+(b2) the ending square
+For a check, append a plus: Qa2c4+
+For a take, place an x between the squares moved: Qa2xc4
+You can also combine the two, take and check: Qa2xc4+
+Checkmate with a pound sign, you can also combine with a take: Qd2d8#</pre>
     </div>
     <script type="text/javascript"
         src="https://code.jquery.com/jquery-2.2.3.min.js"
@@ -130,8 +131,9 @@ $html = <<<eof
 			};
 		};
         $(function() {
+			const moves = $('#moves').val();
             $('#moves').focus();
-            $('#moves').on('keyup', debounce(function() {
+            $('#play').on('click', function() {
 				$.ajax({
 					type: 'POST',
 					url: 'index.php',
@@ -143,7 +145,7 @@ $html = <<<eof
 					},
 					dataType: 'json'
 				});
-			}, 1000));
+			});
         });
     </script>
     </body>
