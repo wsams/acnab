@@ -33,12 +33,20 @@ board.append(r7)
 board.append(r8)
 
 def colval(letter: str):
-    """chess columns are 1-indexed, subtract one to operate on 'board'"""
+    """ chess columns are 1-indexed, subtract one to operate on 'board' """
     return { "a": 0, "b": 1, "c": 2, "d": 3, "e": 4, "f": 5, "g": 6, "h": 7 }[letter]
 
 def rowval(num: str):
-    """chess rows are 1-indexed, subtract one to operate on 'board'"""
+    """ chess rows are 1-indexed, subtract one to operate on 'board' """
     return int(num) - 1
+
+def imgsrc(letter: str):
+    """ get the image src """
+    lets = {
+        "p": "white_pawn", "r": "white_rook", "n": "white_knight", "b": "white_bishop", "q": "white_queen", "k": "white_king",
+        "P": "black_pawn", "R": "black_rook", "N": "black_knight", "B": "black_bishop", "Q": "black_queen", "K": "black_king"
+    };
+    return f"img/{lets[letter]}_32.png";
 
 def render(board: list, moves: list):
     """ mutate the board, then render it """
@@ -70,9 +78,9 @@ def render(board: list, moves: list):
         for cell in row:
             if len(cell) > 0:
                 if islower(cell):
-                    print(f" <td class='cell white-black'>{cell}</td>", end='')
+                    print(f" <td class='cell white-black'><img src='{imgsrc(cell)}' alt='{cell}'/></td>", end='')
                 elif isupper(cell):
-                    print(f" <td class='cell red-black'>{cell}</td>", end='')
+                    print(f" <td class='cell red-black'><img src='{imgsrc(cell)}' alt='{cell}'/></td>", end='')
             else:
                 print(f" <td class='cell silver-black'>-</td>", end='')
         print('</tr><tr>')

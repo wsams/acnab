@@ -44,25 +44,14 @@ $html = <<<eof
             text-align:center;
             vertical-align:middle;
             border:1px solid gray;
-        }
-        .white-black {
-            color:black;
-            background-color:white;
-        }
-        .red-black {
-            color:white;
-            background-color:black;
-        }
-        .silver-black {
-            color:black;
-            background-color:silver;
+            background-color:#ececec;
         }
         #moves {
 
         }
 		body {
             margin-top:6px;
-			background-color:#606060;
+			background-color:white;
 		}
         .cell-legend {
             font-family:monospace;
@@ -75,7 +64,10 @@ $html = <<<eof
             border:0;
             font-weight:bold;
             color:black;
-            background-color:gray;
+            background-color:silver;
+        }
+        .silver-black {
+            color:silver;
         }
     </style>
 </head>

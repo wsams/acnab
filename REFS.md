@@ -1,0 +1,14 @@
+* https://creativecommons.org/licenses/by/2.5/
+* https://www.iconfinder.com/iconsets/chess-7
+* https://www.iconfinder.com/icons/754826/battle_checkmate_chess_figure_game_rook_icon
+* https://www.iconfinder.com/icons/754821/battle_checkmate_chess_figure_game_queen_icon
+* https://www.iconfinder.com/icons/754822/battle_checkmate_chess_figure_game_king_icon
+* https://www.iconfinder.com/icons/754824/battle_checkmate_chess_figure_game_knight_icon
+* https://www.iconfinder.com/icons/754825/battle_checkmate_chess_figure_game_pawn_icon
+* https://www.iconfinder.com/icons/754823/battle_bishop_checkmate_chess_figure_game_icon
+* https://www.iconfinder.com/icons/754819/battle_checkmate_chess_figure_game_pawn_icon
+* https://www.iconfinder.com/icons/754828/battle_checkmate_chess_figure_game_knight_icon
+* https://www.iconfinder.com/icons/754827/battle_bishop_checkmate_chess_figure_game_icon
+* https://www.iconfinder.com/icons/754829/battle_checkmate_chess_figure_game_queen_icon
+* https://www.iconfinder.com/icons/754820/battle_checkmate_chess_figure_game_king_icon
+* https://www.iconfinder.com/icons/754830/battle_checkmate_chess_figure_game_rook_icon
