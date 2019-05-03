@@ -61,6 +61,7 @@ $html = <<<eof
 
         }
 		body {
+            margin-top:6px;
 			background-color:#606060;
 		}
         .cell-legend {
@@ -74,6 +75,7 @@ $html = <<<eof
             border:0;
             font-weight:bold;
             color:black;
+            background-color:gray;
         }
     </style>
 </head>
