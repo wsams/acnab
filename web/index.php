@@ -2,18 +2,17 @@
 ini_set('display_errors', 1);
 
 if (isset($_POST['a'])) {
-	$a = $_POST['a'];
-	if ($a === 'save') {
+    $a = $_POST['a'];
+    if ($a === 'save') {
         $moves = preg_replace('/[^a-h1-9 \.]/', '', $_POST['moves']);
         file_put_contents('chess.game', $moves);
         $command = escapeshellcmd("./chess.py '{$moves}'");
         $board = shell_exec($command);
-		die(json_encode(array('status' => 'ok', 'board' => $board)));
-	}
-	die(json_encode(array('status' => 'unknown')));
+        die(json_encode(array('status' => 'ok', 'board' => $board)));
+    }
+    die(json_encode(array('status' => 'unknown')));
 }
 
-//$command = escapeshellcmd("./chess.py '1. a2a4 2. Ph7h5'");
 $game = file_exists('chess.game') ? file_get_contents('chess.game') : '';
 $command = escapeshellcmd("./chess.py '{$game}'");
 $board = shell_exec($command);
@@ -49,10 +48,10 @@ $html = <<<eof
         #moves {
 
         }
-		body {
+        body {
             margin-top:6px;
-			background-color:white;
-		}
+            background-color:white;
+        }
         .cell-legend {
             font-family:monospace;
             width:3em;
@@ -111,36 +110,36 @@ Checkmate with a pound sign, you can also combine with a take: Qd2d8#</pre>
         crossorigin="anonymous"></script>
     <script type="text/javascript">
         FastClick.attach(document.body);
-		function debounce(func, wait, immediate) {
-			let timeout;
-			return function() {
-				const context = this, args = arguments;
-				const later = function() {
-					timeout = null;
-					if (!immediate) func.apply(context, args);
-				};
-				const callNow = immediate && !timeout;
-				clearTimeout(timeout);
-				timeout = setTimeout(later, wait);
-				if (callNow) func.apply(context, args);
-			};
-		};
+        function debounce(func, wait, immediate) {
+            let timeout;
+            return function() {
+                const context = this, args = arguments;
+                const later = function() {
+                    timeout = null;
+                    if (!immediate) func.apply(context, args);
+                };
+                const callNow = immediate && !timeout;
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+                if (callNow) func.apply(context, args);
+            };
+        };
         $(function() {
-			const moves = $('#moves').val();
+            const moves = $('#moves').val();
             $('#moves').focus();
             $('#play').on('click', function() {
-				$.ajax({
-					type: 'POST',
-					url: 'index.php',
-					data: 'a=save&moves=' + encodeURIComponent($('#moves').val()),
-					success: function(response) {
+                $.ajax({
+                    type: 'POST',
+                    url: 'index.php',
+                    data: 'a=save&moves=' + encodeURIComponent($('#moves').val()),
+                    success: function(response) {
                         if (response.board !== null) {
                             $('#board').html(response.board);
                         }
-					},
-					dataType: 'json'
-				});
-			});
+                    },
+                    dataType: 'json'
+                });
+            });
         });
     </script>
     </body>
