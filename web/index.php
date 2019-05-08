@@ -110,20 +110,6 @@ Checkmate with a pound sign, you can also combine with a take: Qd2d8#</pre>
         crossorigin="anonymous"></script>
     <script type="text/javascript">
         FastClick.attach(document.body);
-        function debounce(func, wait, immediate) {
-            let timeout;
-            return function() {
-                const context = this, args = arguments;
-                const later = function() {
-                    timeout = null;
-                    if (!immediate) func.apply(context, args);
-                };
-                const callNow = immediate && !timeout;
-                clearTimeout(timeout);
-                timeout = setTimeout(later, wait);
-                if (callNow) func.apply(context, args);
-            };
-        };
         $(function() {
             const moves = $('#moves').val();
             $('#moves').focus();
