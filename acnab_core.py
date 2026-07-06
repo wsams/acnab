@@ -272,8 +272,11 @@ def render_payload(moves_text: str) -> dict[str, Any]:
 def _load_storage(storage_path: Path) -> dict[str, Any]:
     if not storage_path.exists():
         return {"version": 1, "games": {}}
-    with storage_path.open("r", encoding="utf-8") as handle:
-        data = json.load(handle)
+    try:
+        with storage_path.open("r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except json.JSONDecodeError:
+        return {"version": 1, "games": {}}
     if not isinstance(data, dict) or "games" not in data:
         return {"version": 1, "games": {}}
     return data
