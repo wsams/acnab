@@ -28,6 +28,18 @@ const elements = {
   saveGame: document.querySelector('#save-game'),
 };
 
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (character) => (
+    {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    }[character]
+  ));
+}
+
 function loadSavedGames() {
   try {
     const parsed = JSON.parse(localStorage.getItem(STORAGE_KEYS.saves) ?? '[]');
@@ -75,9 +87,9 @@ function renderBoard(game) {
         ? `${piece.color} ${piece.name} on ${square.square}`
         : `empty ${square.square}`;
       squares.push(`
-        <div class="board-square board-cell ${square.isLight ? 'light' : 'dark'}" aria-label="${label}">
+        <div class="board-square board-cell ${square.isLight ? 'light' : 'dark'}" aria-label="${escapeHtml(label)}">
           <span aria-hidden="true">${symbol}</span>
-          <span class="coordinate">${square.square}</span>
+          <span class="coordinate">${escapeHtml(square.square)}</span>
         </div>
       `);
     });
@@ -88,7 +100,7 @@ function renderBoard(game) {
 
 function renderMoves(game) {
   const entries = game.appliedMoves.length
-    ? game.appliedMoves.map((move, index) => `<li>${index + 1}. ${move}</li>`)
+    ? game.appliedMoves.map((move, index) => `<li>${index + 1}. ${escapeHtml(move)}</li>`)
     : ['<li>Start position</li>'];
   elements.movesList.innerHTML = entries.join('');
 }
@@ -185,13 +197,13 @@ function drawSavedGames() {
       (game) => `
         <article class="saved-game">
           <header>
-            <strong>${game.name}</strong>
+            <strong>${escapeHtml(game.name)}</strong>
             <small>${formatTimestamp(game.updatedAt)}</small>
           </header>
-          <small>${game.moveCount} moves · ${game.fen}</small>
+          <small>${escapeHtml(game.moveCount)} moves · ${escapeHtml(game.fen)}</small>
           <div class="saved-game-actions">
-            <button type="button" class="button ghost" data-load="${game.name}">Load</button>
-            <button type="button" class="button ghost" data-delete="${game.name}">Delete</button>
+            <button type="button" class="button ghost" data-load="${escapeHtml(game.name)}">Load</button>
+            <button type="button" class="button ghost" data-delete="${escapeHtml(game.name)}">Delete</button>
           </div>
         </article>
       `,

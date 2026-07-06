@@ -3,19 +3,19 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from acnab_core import apply_moves, list_games, load_game, render_payload, save_game
+from acnab_core import apply_moves, chesslib, list_games, load_game, render_payload, save_game
 
 
 class AcnabCoreTests(unittest.TestCase):
     def test_standard_san_moves_render(self):
         payload = render_payload('1. e4 e5 2. Nf3 Nc6 3. Bb5 a6')
         self.assertEqual(payload['moveCount'], 6)
-        self.assertEqual(payload['board'][3][0]['piece']['symbol'], 'p')
+        self.assertEqual(payload['board'][4][4]['piece']['symbol'], 'P')
         self.assertEqual(payload['appliedMoves'][-1], 'a6')
 
     def test_legacy_moves_still_work(self):
         board, applied = apply_moves('1. Pf2f4 2. Nb8c6')
-        self.assertEqual(board.piece_at(board.parse_square('f4')).symbol(), 'P')
+        self.assertEqual(board.piece_at(chesslib.parse_square('f4')).symbol(), 'P')
         self.assertEqual(applied, ['f4', 'Nc6'])
 
     def test_local_save_round_trip(self):
