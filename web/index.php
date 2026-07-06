@@ -1,136 +1,169 @@
 <?php
-ini_set('display_errors', 1);
+ini_set('display_errors', '1');
 
-if (isset($_POST['a'])) {
-    $a = $_POST['a'];
-    if ($a === 'save') {
-        $moves = preg_replace('/[^a-h1-9 \.]/', '', $_POST['moves']);
-        file_put_contents('chess.game', $moves);
-        $command = escapeshellcmd("./chess.py '{$moves}'");
-        $board = shell_exec($command);
-        die(json_encode(array('status' => 'ok', 'board' => $board)));
+function read_moves_payload(): string {
+    $moves = $_POST['moves'] ?? '';
+    if ($moves === '') {
+        $raw = file_get_contents('php://input');
+        if ($raw !== false && $raw !== '') {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded) && isset($decoded['moves']) && is_string($decoded['moves'])) {
+                $moves = $decoded['moves'];
+            }
+        }
     }
-    die(json_encode(array('status' => 'unknown')));
+
+    return trim(str_replace("\0", '', $moves));
 }
 
-$game = file_exists('chess.game') ? file_get_contents('chess.game') : '';
-$command = escapeshellcmd("./chess.py '{$game}'");
-$board = shell_exec($command);
+function render_game(string $moves): array {
+    $command = 'python3 ' . escapeshellarg(__DIR__ . '/../chess.py') . ' --format json --moves-file -';
+    $descriptors = [
+        0 => ['pipe', 'w'],
+        1 => ['pipe', 'r'],
+        2 => ['pipe', 'r'],
+    ];
 
-$html = <<<eof
-<!DOCTYPE HTML>
-<html>
+    $process = proc_open($command, $descriptors, $pipes, __DIR__);
+    if (!is_resource($process)) {
+        throw new RuntimeException('Unable to start the chess renderer.');
+    }
+
+    fwrite($pipes[0], $moves);
+    fclose($pipes[0]);
+
+    $stdout = stream_get_contents($pipes[1]);
+    fclose($pipes[1]);
+
+    $stderr = stream_get_contents($pipes[2]);
+    fclose($pipes[2]);
+
+    $exitCode = proc_close($process);
+    if ($exitCode !== 0) {
+        throw new RuntimeException(trim($stderr) ?: 'The chess renderer returned an error.');
+    }
+
+    $decoded = json_decode($stdout, true);
+    if (!is_array($decoded)) {
+        throw new RuntimeException('The chess renderer returned invalid JSON.');
+    }
+
+    return $decoded;
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    header('Content-Type: application/json; charset=utf-8');
+    try {
+        if (($_POST['a'] ?? '') !== 'render') {
+            throw new RuntimeException('Unknown action requested.');
+        }
+
+        $game = render_game(read_moves_payload());
+        echo json_encode(['status' => 'ok', 'game' => $game], JSON_UNESCAPED_UNICODE);
+    } catch (Throwable $exception) {
+        http_response_code(422);
+        echo json_encode([
+            'status' => 'error',
+            'message' => $exception->getMessage(),
+        ], JSON_UNESCAPED_UNICODE);
+    }
+    exit;
+}
+
+$initialGame = render_game('');
+?>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-    <title>acnab frontend</title>
-    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-    <link rel="stylesheet"
-        href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css"
-        integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7"
-        crossorigin="anonymous">
-    <link rel="stylesheet"
-        href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap-theme.min.css"
-        integrity="sha384-fLW2N01lMqjakBkx3l/M9EahuwpSfeNvV63J5ezn3uZzapT0u7EYsXMjQV+0En5r"
-        crossorigin="anonymous">
-    <link rel="icon" type="image/ico" href="favicon.ico">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <style type="text/css">
-        .cell {
-            font-family:monospace;
-            width:3em;
-            height:3em;
-            padding:4px;
-            margin:0;
-            text-align:center;
-            vertical-align:middle;
-            border:1px solid gray;
-            background-color:#ececec;
-        }
-        #moves {
-
-        }
-        body {
-            margin-top:6px;
-            background-color:white;
-        }
-        .cell-legend {
-            font-family:monospace;
-            width:3em;
-            height:3em;
-            padding:4px;
-            margin:0;
-            text-align:center;
-            vertical-align:middle;
-            border:0;
-            font-weight:bold;
-            color:black;
-            background-color:silver;
-        }
-        .silver-black {
-            color:silver;
-        }
-    </style>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>acnab</title>
+    <link rel="stylesheet" href="app.css" />
 </head>
 <body>
-    <div class="container">
-        <table id="board">{$board}</table>
-        <br>
-        <textarea class="form-control" id="moves">{$game}</textarea>
-        <br>
-        <button id="play" class="btn btn-primary">Play</button>
-        <br>
-        <br>
-        <pre>Rules
------
-Example move: 1. Ka1b2
+    <main class="app-shell">
+        <section class="panel panel-board">
+            <div class="panel-heading">
+                <div>
+                    <p class="eyebrow">acnab</p>
+                    <h1>Interactive chess notation board</h1>
+                </div>
+                <div class="toolbar">
+                    <label class="field compact-field">
+                        <span>Theme</span>
+                        <select id="theme-select">
+                            <option value="classic">Classic</option>
+                            <option value="midnight">Midnight</option>
+                            <option value="forest">Forest</option>
+                        </select>
+                    </label>
+                    <button id="new-game" type="button" class="button ghost">New board</button>
+                </div>
+            </div>
+            <div id="status" class="status-card"></div>
+            <div class="board-summary">
+                <div>
+                    <span class="summary-label">FEN</span>
+                    <code id="fen"></code>
+                </div>
+                <div>
+                    <span class="summary-label">Moves</span>
+                    <span id="move-count">0</span>
+                </div>
+            </div>
+            <div id="board" class="board" aria-live="polite"></div>
+            <ol id="moves-list" class="moves-list"></ol>
+        </section>
 
-Below is a break down of the single move above. The general format is: 1. move_1 2. move_2 3. move_3 ...
+        <section class="panel panel-controls">
+            <div class="panel-heading">
+                <div>
+                    <p class="eyebrow">Notation</p>
+                    <h2>Work with standard chess notation</h2>
+                </div>
+            </div>
+            <form id="render-form" class="controls-stack">
+                <label class="field">
+                    <span>Moves</span>
+                    <textarea id="moves" name="moves" rows="10" spellcheck="false" placeholder="1. e4 e5 2. Nf3 Nc6 3. Bb5 a6"></textarea>
+                </label>
+                <div class="actions">
+                    <button type="submit" class="button primary">Render board</button>
+                    <button type="button" id="copy-pgn" class="button ghost">Copy notation</button>
+                </div>
+                <div id="feedback" class="feedback" role="status" aria-live="polite"></div>
+            </form>
 
-(1.) is the play number. Start from 1 and increment.
-(K) is the player - single letter uppercase: King(K), Queen(Q), Bishop(B), Knight(N), Rook(R), Pawn(P) [optional]
-(a1) the starting square
-(b2) the ending square
-For a check, append a plus: Qa2c4+
-For a take, place an x between the squares moved: Qa2xc4
-You can also combine the two, take and check: Qa2xc4+
-Checkmate with a pound sign, you can also combine with a take: Qd2d8#</pre>
-        Powered by <a target="_blank" href="https://github.com/wsams/acnab">acnab</a>
-    </div>
-    <script type="text/javascript"
-        src="https://code.jquery.com/jquery-2.2.3.min.js"
-        integrity="sha256-a23g1Nt4dtEYOj7bR+vTu7+T8VP13humZFBJNIYoEJo="
-        crossorigin="anonymous"></script>
-    <script type="text/javascript"
-        src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.12.0/moment.min.js"
-        crossorigin="anonymous"></script>
-    <script type="text/javascript"
-        src="https://cdnjs.cloudflare.com/ajax/libs/fastclick/1.0.6/fastclick.min.js" crossorigin="anonymous"></script>
-    <script type="text/javascript"
-        src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"
-        integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS"
-        crossorigin="anonymous"></script>
-    <script type="text/javascript">
-        FastClick.attach(document.body);
-        $(function() {
-            const moves = $('#moves').val();
-            $('#moves').focus();
-            $('#play').on('click', function() {
-                $.ajax({
-                    type: 'POST',
-                    url: 'index.php',
-                    data: 'a=save&moves=' + encodeURIComponent($('#moves').val()),
-                    success: function(response) {
-                        if (response.board !== null) {
-                            $('#board').html(response.board);
-                        }
-                    },
-                    dataType: 'json'
-                });
-            });
-        });
+            <div class="storage-panel">
+                <div class="storage-header">
+                    <h3>Local browser saves</h3>
+                    <p>Your saved games stay in this browser via localStorage.</p>
+                </div>
+                <div class="storage-controls">
+                    <label class="field">
+                        <span>Save name</span>
+                        <input id="save-name" type="text" placeholder="Ruy Lopez demo" />
+                    </label>
+                    <button id="save-game" type="button" class="button primary">Save locally</button>
+                </div>
+                <div id="saved-games" class="saved-games"></div>
+            </div>
+
+            <details class="help-card">
+                <summary>Supported notation and tips</summary>
+                <ul>
+                    <li>Standard SAN/PGN is supported: <code>e4</code>, <code>Nf3</code>, <code>O-O</code>, <code>Qxd5+</code>, <code>c8=Q#</code>.</li>
+                    <li>Legacy coordinate moves still work for compatibility: <code>Pf2f4</code>, <code>Nb8c6</code>.</li>
+                    <li>The board updates as you type, and the current draft is restored automatically.</li>
+                    <li>Use the CLI for shell completions: <code>python3 chess.py --print-completion bash</code> or <code>fish</code>.</li>
+                </ul>
+            </details>
+        </section>
+    </main>
+
+    <script>
+        window.__ACNAB__ = <?php echo json_encode($initialGame, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
     </script>
-    </body>
+    <script type="module" src="app.js"></script>
+</body>
 </html>
-eof;
-
-print($html);
-
