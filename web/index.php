@@ -19,9 +19,9 @@ function read_moves_payload(): string {
 function render_game(string $moves): array {
     $command = 'python3 ' . escapeshellarg(__DIR__ . '/../chess.py') . ' --format json --moves-file -';
     $descriptors = [
-        0 => ['pipe', 'w'],
-        1 => ['pipe', 'r'],
-        2 => ['pipe', 'r'],
+        0 => ['pipe', 'r'],
+        1 => ['pipe', 'w'],
+        2 => ['pipe', 'w'],
     ];
 
     $process = proc_open($command, $descriptors, $pipes, __DIR__);
