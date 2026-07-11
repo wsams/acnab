@@ -1,3 +1,10 @@
+## [1.1.1](https://github.com/wsams/acnab/compare/v1.1.0...v1.1.1) (2026-07-11)
+
+
+### Bug Fixes
+
+* publish Pages app under /web/ instead of repo root ([#4](https://github.com/wsams/acnab/issues/4)) ([834fb2b](https://github.com/wsams/acnab/commit/834fb2bec7f1a0500eb4ab3de9e7714fb9c95b99))
+
 # [1.1.0](https://github.com/wsams/acnab/compare/v1.0.0...v1.1.0) (2026-07-11)
 
 
