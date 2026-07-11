@@ -1,0 +1,62 @@
+{
+  "name": "acnab",
+  "version": "0.0.0-development",
+  "private": true,
+  "type": "module",
+  "description": "Render chess positions from standard chess notation in the terminal and browser.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wsams/acnab.git"
+  },
+  "homepage": "https://wsams.github.io/acnab/",
+  "bugs": {
+    "url": "https://github.com/wsams/acnab/issues"
+  },
+  "license": "SEE LICENSE IN LICENSE",
+  "scripts": {
+    "build:pages": "node scripts/build-pages.mjs",
+    "release": "semantic-release"
+  },
+  "release": {
+    "branches": [
+      "master"
+    ],
+    "plugins": [
+      "@semantic-release/commit-analyzer",
+      "@semantic-release/release-notes-generator",
+      [
+        "@semantic-release/changelog",
+        {
+          "changelogFile": "CHANGELOG.md"
+        }
+      ],
+      [
+        "@semantic-release/npm",
+        {
+          "npmPublish": false
+        }
+      ],
+      [
+        "@semantic-release/git",
+        {
+          "assets": [
+            "CHANGELOG.md",
+            "package.json",
+            "package-lock.json"
+          ],
+          "message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
+        }
+      ],
+      "@semantic-release/github"
+    ]
+  },
+  "devDependencies": {
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/commit-analyzer": "^13.0.1",
+    "@semantic-release/git": "^10.0.1",
+    "@semantic-release/github": "^11.0.3",
+    "@semantic-release/npm": "^12.0.2",
+    "@semantic-release/release-notes-generator": "^14.0.3",
+    "semantic-release": "^24.2.7"
+  }
+}

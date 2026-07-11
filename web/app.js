@@ -1,13 +1,17 @@
+import { emptyGame, renderGame } from './engine.js';
+
 const STORAGE_KEYS = {
   draft: 'acnab:draft',
   saves: 'acnab:saves',
   theme: 'acnab:theme',
 };
 
+const DEMO_MOVES = '1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7';
+
 const state = {
-  game: window.__ACNAB__,
-  draft: localStorage.getItem(STORAGE_KEYS.draft) ?? window.__ACNAB__.input ?? '',
-  theme: localStorage.getItem(STORAGE_KEYS.theme) ?? 'classic',
+  game: emptyGame(),
+  draft: localStorage.getItem(STORAGE_KEYS.draft) ?? '',
+  theme: localStorage.getItem(STORAGE_KEYS.theme) ?? 'walnut',
   requestTimer: null,
 };
 
@@ -26,6 +30,7 @@ const elements = {
   newGame: document.querySelector('#new-game'),
   copyPgn: document.querySelector('#copy-pgn'),
   saveGame: document.querySelector('#save-game'),
+  loadDemo: document.querySelector('#load-demo'),
 };
 
 function escapeHtml(value) {
@@ -86,9 +91,10 @@ function renderBoard(game) {
       const label = piece
         ? `${piece.color} ${piece.name} on ${square.square}`
         : `empty ${square.square}`;
+      const pieceClass = piece ? ` has-piece ${piece.color}` : '';
       squares.push(`
-        <div class="board-square board-cell ${square.isLight ? 'light' : 'dark'}" aria-label="${escapeHtml(label)}">
-          <span aria-hidden="true">${symbol}</span>
+        <div class="board-square board-cell ${square.isLight ? 'light' : 'dark'}${pieceClass}" aria-label="${escapeHtml(label)}">
+          <span class="piece" aria-hidden="true">${symbol}</span>
           <span class="coordinate">${escapeHtml(square.square)}</span>
         </div>
       `);
@@ -96,6 +102,10 @@ function renderBoard(game) {
   });
 
   elements.board.innerHTML = squares.join('');
+  elements.board.classList.remove('is-updating');
+  // Retrigger board entrance animation
+  void elements.board.offsetWidth;
+  elements.board.classList.add('is-ready');
 }
 
 function renderMoves(game) {
@@ -111,42 +121,25 @@ function renderStatus(game) {
   elements.moveCount.textContent = String(game.moveCount);
 }
 
-function renderGame(game) {
+function paintGame(game) {
   state.game = game;
   renderBoard(game);
   renderMoves(game);
   renderStatus(game);
 }
 
-async function requestRender(moves) {
-  const formData = new FormData();
-  formData.set('a', 'render');
-  formData.set('moves', moves);
-
-  const response = await fetch('index.php', {
-    method: 'POST',
-    body: formData,
-    headers: {
-      Accept: 'application/json',
-    },
-  });
-
-  const payload = await response.json();
-  if (!response.ok || payload.status !== 'ok') {
-    throw new Error(payload.message ?? 'Unable to render the board.');
-  }
-  return payload.game;
-}
-
-async function updateBoard(moves, announce = true) {
+function updateBoard(moves, announce = true) {
   state.draft = moves;
   localStorage.setItem(STORAGE_KEYS.draft, moves);
 
   try {
-    const game = await requestRender(moves);
-    renderGame(game);
+    const game = renderGame(moves);
+    paintGame(game);
     if (announce) {
       setFeedback('Board updated.');
+    } else {
+      elements.feedback.textContent = '';
+      elements.feedback.classList.remove('is-error');
     }
   } catch (error) {
     setFeedback(error.message, true);
@@ -157,7 +150,7 @@ function queueLiveRender() {
   clearTimeout(state.requestTimer);
   state.requestTimer = window.setTimeout(() => {
     updateBoard(elements.moves.value, false);
-  }, 300);
+  }, 180);
 }
 
 function upsertSavedGame(name, moves, game) {
@@ -188,7 +181,7 @@ function removeSavedGame(name) {
 function drawSavedGames() {
   const savedGames = loadSavedGames();
   if (!savedGames.length) {
-    elements.savedGames.innerHTML = '<p class="saved-game"><span>No local saves yet.</span></p>';
+    elements.savedGames.innerHTML = '<p class="saved-game empty-save"><span>No local saves yet.</span></p>';
     return;
   }
 
@@ -226,6 +219,12 @@ async function copyNotation() {
   }
 }
 
+function loadDemo() {
+  elements.moves.value = DEMO_MOVES;
+  updateBoard(DEMO_MOVES, true);
+  elements.moves.focus();
+}
+
 function bindEvents() {
   elements.renderForm.addEventListener('submit', (event) => {
     event.preventDefault();
@@ -236,6 +235,15 @@ function bindEvents() {
   elements.themeSelect.addEventListener('change', (event) => applyTheme(event.target.value));
   elements.newGame.addEventListener('click', resetBoard);
   elements.copyPgn.addEventListener('click', copyNotation);
+  elements.loadDemo?.addEventListener('click', loadDemo);
+
+  document.querySelectorAll('[data-focus-moves]').forEach((node) => {
+    node.addEventListener('click', (event) => {
+      event.preventDefault();
+      elements.moves.focus();
+      elements.moves.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  });
 
   elements.saveGame.addEventListener('click', () => {
     const name = elements.saveName.value.trim();
@@ -274,13 +282,15 @@ function bindEvents() {
 function bootstrap() {
   applyTheme(state.theme);
   elements.moves.value = state.draft;
-  renderGame(state.game);
+  paintGame(state.game);
   drawSavedGames();
   bindEvents();
 
   if (state.draft) {
     updateBoard(state.draft, false);
   }
+
+  document.body.classList.add('is-booted');
 }
 
 bootstrap();

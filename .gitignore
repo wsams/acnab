@@ -100,5 +100,11 @@ venv.bak/
 # mkdocs documentation
 /site
 
+# GitHub Pages build output
+/_site/
+
+# Node
+node_modules/
+
 # mypy
 .mypy_cache/
