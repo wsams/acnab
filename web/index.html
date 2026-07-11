@@ -6,8 +6,27 @@
   <meta name="description" content="acnab — type chess notation and watch the board update live. Play free in your browser on GitHub Pages." />
   <title>acnab — free chess notation board</title>
   <link rel="stylesheet" href="app.css" />
+  <script>
+    (function () {
+      var themes = {
+        walnut: 'dark', ink: 'dark', midnight: 'dark', ember: 'dark',
+        slate: 'dark', ocean: 'dark', meadow: 'light', parchment: 'light', frost: 'light'
+      };
+      var theme = 'walnut';
+      try {
+        var saved = localStorage.getItem('acnab:theme');
+        if (saved && themes[saved]) theme = saved;
+      } catch (error) {}
+      document.documentElement.dataset.theme = theme;
+      document.documentElement.style.colorScheme = themes[theme];
+      document.addEventListener('DOMContentLoaded', function () {
+        document.body.dataset.theme = theme;
+        document.body.dataset.scheme = themes[theme];
+      });
+    })();
+  </script>
 </head>
-<body data-theme="walnut">
+<body data-theme="walnut" data-scheme="dark">
   <div class="atmosphere" aria-hidden="true"></div>
 
   <header class="site-header">
@@ -30,10 +49,20 @@
         <div class="toolbar">
           <label class="field compact-field">
             <span>Theme</span>
-            <select id="theme-select">
-              <option value="walnut">Walnut</option>
-              <option value="ink">Ink</option>
-              <option value="meadow">Meadow</option>
+            <select id="theme-select" aria-label="Color theme">
+              <optgroup label="Dark">
+                <option value="walnut" selected>Walnut</option>
+                <option value="ink">Ink</option>
+                <option value="midnight">Midnight</option>
+                <option value="ember">Ember</option>
+                <option value="slate">Slate</option>
+                <option value="ocean">Ocean</option>
+              </optgroup>
+              <optgroup label="Light">
+                <option value="meadow">Meadow</option>
+                <option value="parchment">Parchment</option>
+                <option value="frost">Frost</option>
+              </optgroup>
             </select>
           </label>
           <button id="new-game" type="button" class="button ghost">New board</button>

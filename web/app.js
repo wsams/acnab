@@ -8,10 +8,28 @@ const STORAGE_KEYS = {
 
 const DEMO_MOVES = '1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7';
 
+const THEMES = {
+  walnut: { label: 'Walnut', scheme: 'dark' },
+  ink: { label: 'Ink', scheme: 'dark' },
+  midnight: { label: 'Midnight', scheme: 'dark' },
+  ember: { label: 'Ember', scheme: 'dark' },
+  slate: { label: 'Slate', scheme: 'dark' },
+  ocean: { label: 'Ocean', scheme: 'dark' },
+  meadow: { label: 'Meadow', scheme: 'light' },
+  parchment: { label: 'Parchment', scheme: 'light' },
+  frost: { label: 'Frost', scheme: 'light' },
+};
+
+const DEFAULT_THEME = 'walnut';
+
+function resolveTheme(theme) {
+  return THEMES[theme] ? theme : DEFAULT_THEME;
+}
+
 const state = {
   game: emptyGame(),
   draft: localStorage.getItem(STORAGE_KEYS.draft) ?? '',
-  theme: localStorage.getItem(STORAGE_KEYS.theme) ?? 'walnut',
+  theme: resolveTheme(localStorage.getItem(STORAGE_KEYS.theme)),
   requestTimer: null,
 };
 
@@ -66,10 +84,14 @@ function formatTimestamp(timestamp) {
 }
 
 function applyTheme(theme) {
-  state.theme = theme;
-  document.body.dataset.theme = theme;
-  elements.themeSelect.value = theme;
-  localStorage.setItem(STORAGE_KEYS.theme, theme);
+  const nextTheme = resolveTheme(theme);
+  state.theme = nextTheme;
+  document.documentElement.dataset.theme = nextTheme;
+  document.body.dataset.theme = nextTheme;
+  document.body.dataset.scheme = THEMES[nextTheme].scheme;
+  document.documentElement.style.colorScheme = THEMES[nextTheme].scheme;
+  elements.themeSelect.value = nextTheme;
+  localStorage.setItem(STORAGE_KEYS.theme, nextTheme);
 }
 
 function setFeedback(message, isError = false) {
