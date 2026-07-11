@@ -387,6 +387,13 @@ code {
   max-width: 28rem;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+}
+
 .play-pill {
   display: inline-flex;
   align-items: center;
@@ -406,6 +413,19 @@ code {
   transform: translateY(-2px);
   background: var(--accent-strong);
   box-shadow: 0 14px 32px rgba(0, 0, 0, 0.3);
+}
+
+.github-link {
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 600;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  padding-bottom: 0.1rem;
+}
+
+.github-link:hover {
+  color: var(--accent-strong);
+  border-bottom-color: var(--accent-strong);
 }
 
 .app-shell {
@@ -694,6 +714,18 @@ textarea {
 .site-footer strong {
   color: var(--text);
   font-family: "Syne", sans-serif;
+}
+
+.site-footer a,
+.help-card a {
+  color: var(--accent-strong);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.site-footer a:hover,
+.help-card a:hover {
+  color: var(--text);
 }
 
 @keyframes rise-in {
