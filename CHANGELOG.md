@@ -1,3 +1,10 @@
+## [1.1.2](https://github.com/wsams/acnab/compare/v1.1.1...v1.1.2) (2026-07-11)
+
+
+### Bug Fixes
+
+* link the web app back to the GitHub repository ([#5](https://github.com/wsams/acnab/issues/5)) ([af35967](https://github.com/wsams/acnab/commit/af35967d39065175e3943e288a64003bbe3c5ed3))
+
 ## [1.1.1](https://github.com/wsams/acnab/compare/v1.1.0...v1.1.1) (2026-07-11)
 
 
