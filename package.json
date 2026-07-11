@@ -1,6 +1,6 @@
 {
   "name": "acnab",
-  "version": "0.0.0-development",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "description": "Render chess positions from standard chess notation in the terminal and browser.",
