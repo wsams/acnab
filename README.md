@@ -1,10 +1,10 @@
 # acnab
 
-[![Play free on GitHub Pages](https://img.shields.io/badge/Play%20free-on%20GitHub%20Pages-d4a15a?style=for-the-badge&labelColor=14110f)](https://wsams.github.io/acnab/)
+[![Play free on GitHub Pages](https://img.shields.io/badge/Play%20free-on%20GitHub%20Pages-d4a15a?style=for-the-badge&labelColor=14110f)](https://wsams.github.io/acnab/web/)
 
 **acnab** renders chess positions from standard chess notation in the terminal and in the browser.
 
-**Play it free right now:** [wsams.github.io/acnab](https://wsams.github.io/acnab/) — no install, no account. Type SAN/PGN moves and watch the board update live.
+**Play it free right now:** [wsams.github.io/acnab/web](https://wsams.github.io/acnab/web/) — no install, no account. Type SAN/PGN moves and watch the board update live.
 
 ## CLI usage
 
@@ -44,9 +44,9 @@ python3 chess.py --list-games
 
 ### Free on GitHub Pages
 
-Open **[https://wsams.github.io/acnab/](https://wsams.github.io/acnab/)** to play in the browser for free.
+Open **[https://wsams.github.io/acnab/web/](https://wsams.github.io/acnab/web/)** to play in the browser for free.
 
-The Pages build is fully static and client-side:
+GitHub Pages publishes the static UI from `web/` (the site root redirects there). The build is fully static and client-side:
 
 - live board updates while typing
 - localStorage drafts and named saves
