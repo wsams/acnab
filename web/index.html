@@ -34,9 +34,18 @@
       <p class="brand">acnab</p>
       <p class="tagline">Chess notation, rendered live — free to play in your browser.</p>
     </div>
-    <a class="play-pill" href="#board-stage" data-focus-moves>
-      Play free on GitHub Pages
-    </a>
+    <nav class="header-actions" aria-label="Site links">
+      <a class="play-pill" href="#board-stage" data-focus-moves>
+        Play free on GitHub Pages
+      </a>
+      <a
+        class="github-link"
+        href="https://github.com/wsams/acnab"
+        rel="noopener noreferrer"
+      >
+        Source on GitHub
+      </a>
+    </nav>
   </header>
 
   <main class="app-shell">
@@ -128,7 +137,7 @@
           <li>Standard SAN/PGN is supported: <code>e4</code>, <code>Nf3</code>, <code>O-O</code>, <code>Qxd5+</code>, <code>c8=Q#</code>.</li>
           <li>Legacy coordinate moves still work for compatibility: <code>Pf2f4</code>, <code>Nb8c6</code>.</li>
           <li>The board updates as you type, and the current draft is restored automatically.</li>
-          <li>This site runs entirely in your browser — no account, no install, free on GitHub Pages.</li>
+          <li>This site runs entirely in your browser — no account, no install, free on GitHub Pages. Source on <a href="https://github.com/wsams/acnab" rel="noopener noreferrer">GitHub</a>.</li>
           <li>CLI companions: <code>python3 chess.py --print-completion bash</code> or <code>fish</code>.</li>
         </ul>
       </details>
@@ -136,7 +145,12 @@
   </main>
 
   <footer class="site-footer">
-    <p><strong>acnab</strong> is free to use in the browser on GitHub Pages. Notation stays on your device.</p>
+    <p>
+      <strong>acnab</strong> is free to use in the browser on GitHub Pages.
+      Notation stays on your device.
+      Source on
+      <a href="https://github.com/wsams/acnab" rel="noopener noreferrer">GitHub</a>.
+    </p>
   </footer>
 
   <script type="module" src="app.js"></script>
