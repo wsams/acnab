@@ -1,8 +1,10 @@
 # acnab
 
-acnab renders chess positions from standard chess notation in the terminal and in the browser.
-It now understands SAN/PGN-style moves, keeps legacy coordinate moves for compatibility,
-and ships with a modernized web UI plus local save workflows.
+[![Play free on GitHub Pages](https://img.shields.io/badge/Play%20free-on%20GitHub%20Pages-d4a15a?style=for-the-badge&labelColor=14110f)](https://wsams.github.io/acnab/)
+
+**acnab** renders chess positions from standard chess notation in the terminal and in the browser.
+
+**Play it free right now:** [wsams.github.io/acnab](https://wsams.github.io/acnab/) — no install, no account. Type SAN/PGN moves and watch the board update live.
 
 ## CLI usage
 
@@ -40,14 +42,28 @@ python3 chess.py --list-games
 
 ## Web usage
 
-Serve the `web` directory with PHP and open `web/index.php`.
+### Free on GitHub Pages
 
-The web app now includes:
+Open **[https://wsams.github.io/acnab/](https://wsams.github.io/acnab/)** to play in the browser for free.
+
+The Pages build is fully static and client-side:
 
 - live board updates while typing
-- a lighter modern UI with no CDN dependencies
-- browser localStorage saves for drafts and named games
-- theme switching and FEN/status summaries
+- localStorage drafts and named saves
+- theme switching plus FEN/status summaries
+- no CDN runtime dependency for the chess engine
+
+### Local static preview
+
+```bash
+python3 -m http.server 8080 --directory web
+```
+
+Then open `http://localhost:8080/`.
+
+### Optional PHP + Python API
+
+Serve `web/` with PHP if you want the optional `POST` render endpoint that shells out to `chess.py`. Opening `web/index.php` still serves the same client-side UI.
 
 ## Development notes
 
@@ -59,3 +75,19 @@ python3 -m unittest discover -s tests
 python3 -m py_compile chess.py web/chess.py acnab_core.py
 php -l web/index.php
 ```
+
+Install Node release tooling (used by CI):
+
+```bash
+npm clean-install
+```
+
+Build the GitHub Pages artifact locally:
+
+```bash
+npm run build:pages
+```
+
+### Releases
+
+Pushes to `master` run [semantic-release](https://semantic-release.gitbook.io/) via `.github/workflows/release.yml` (direct `npx semantic-release`, no third-party release action) and deploy the static site with `.github/workflows/pages.yml`.
