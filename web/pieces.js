@@ -31,8 +31,9 @@ export const PIECE_PALETTES = {
     label: 'Ivory & Ebony',
     whiteName: 'Ivory',
     blackName: 'Ebony',
-    white: { fill: '#fff8ef', stroke: '#1c1410', detail: '#1c1410' },
-    black: { fill: '#1a120c', stroke: '#f3e6d4', detail: '#f3e6d4' },
+    // Brighter ivory + deeper ebony so pieces stay distinct on warm boards.
+    white: { fill: '#fffdf6', stroke: '#14100c', detail: '#14100c' },
+    black: { fill: '#100c09', stroke: '#f7ecd8', detail: '#f7ecd8' },
   },
   scarlet: {
     label: 'Cream & Scarlet',

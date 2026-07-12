@@ -774,18 +774,36 @@ textarea {
 }
 
 .clock-face {
+  --clock-fill: transparent;
+  --clock-stroke: var(--border);
   display: grid;
   gap: 0.2rem;
   padding: 0.7rem 0.8rem;
   border-radius: 0.85rem;
-  border: 1px solid var(--border);
-  background: rgba(0, 0, 0, 0.12);
+  border: 1px solid color-mix(in srgb, var(--clock-stroke) 55%, var(--border));
+  background:
+    linear-gradient(
+      160deg,
+      color-mix(in srgb, var(--clock-fill) 72%, transparent),
+      color-mix(in srgb, var(--clock-fill) 28%, rgba(0, 0, 0, 0.18))
+    );
+  color: var(--clock-stroke);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+
+.clock-face.is-light-side {
+  color: #1a120c;
+}
+
+.clock-face.is-dark-side {
+  color: #f4ebe1;
 }
 
 .clock-face.is-active {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent),
+    0 10px 24px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
 .clock-face.is-low .clock-time {
@@ -794,7 +812,7 @@ textarea {
 
 .clock-face.is-flagged {
   border-color: var(--error);
-  background: color-mix(in srgb, var(--error) 14%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--error) 28%, transparent);
 }
 
 .clock-face.is-flagged .clock-time {
@@ -805,8 +823,8 @@ textarea {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-size: 0.68rem;
-  font-weight: 600;
-  color: var(--muted);
+  font-weight: 700;
+  opacity: 0.72;
 }
 
 .clock-time {

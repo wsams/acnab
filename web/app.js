@@ -8,6 +8,7 @@ import {
   PIECE_PALETTES,
   PIECE_SETS,
   applyPiecePalette as applyPiecePaletteVars,
+  getPaletteSide,
   getPaletteSideNames,
   renderPieceSvg,
   resolvePiecePalette,
@@ -218,22 +219,40 @@ function updateClockHint() {
   elements.clockHint.textContent = CLOCK_MODES[state.clockMode].description;
 }
 
+function paintClockFace(face, timeEl, labelEl, side, snapshot, names) {
+  const palette = getPaletteSide(state.piecePalette, side);
+  const isLightSide = side === 'white';
+  timeEl.textContent = snapshot.display[side];
+  if (labelEl) {
+    labelEl.textContent = names[side];
+  }
+  face.style.setProperty('--clock-fill', palette.fill);
+  face.style.setProperty('--clock-stroke', palette.stroke);
+  face.classList.toggle('is-light-side', isLightSide);
+  face.classList.toggle('is-dark-side', !isLightSide);
+  face.classList.toggle('is-active', snapshot.active === side && snapshot.running);
+  face.classList.toggle('is-flagged', snapshot.flagged === side);
+  face.classList.toggle('is-low', snapshot.times[side] <= 30_000);
+}
+
 function paintClock(snapshot = clock.snapshot()) {
   const names = getPaletteSideNames(state.piecePalette);
-  elements.clockWhiteTime.textContent = snapshot.display.white;
-  elements.clockBlackTime.textContent = snapshot.display.black;
-  if (elements.clockWhiteLabel) {
-    elements.clockWhiteLabel.textContent = names.white;
-  }
-  if (elements.clockBlackLabel) {
-    elements.clockBlackLabel.textContent = names.black;
-  }
-  elements.clockWhite.classList.toggle('is-active', snapshot.active === 'white' && snapshot.running);
-  elements.clockBlack.classList.toggle('is-active', snapshot.active === 'black' && snapshot.running);
-  elements.clockWhite.classList.toggle('is-flagged', snapshot.flagged === 'white');
-  elements.clockBlack.classList.toggle('is-flagged', snapshot.flagged === 'black');
-  elements.clockWhite.classList.toggle('is-low', snapshot.times.white <= 30_000);
-  elements.clockBlack.classList.toggle('is-low', snapshot.times.black <= 30_000);
+  paintClockFace(
+    elements.clockWhite,
+    elements.clockWhiteTime,
+    elements.clockWhiteLabel,
+    'white',
+    snapshot,
+    names,
+  );
+  paintClockFace(
+    elements.clockBlack,
+    elements.clockBlackTime,
+    elements.clockBlackLabel,
+    'black',
+    snapshot,
+    names,
+  );
   document.getElementById('clock-panel')?.classList.toggle('is-typing-paused', snapshot.typingPaused);
 }
 
@@ -291,7 +310,10 @@ function syncClockFromNotation(text, game, { force = false, previousMoveCount = 
       const markers = signature ? signature.split('|') : [];
       const last = markers[markers.length - 1];
       if (last) {
-        const side = last.endsWith(':black') ? 'black' : 'white';
+        // Move numbers press the clock; the side to move owns the time
+        // (not the move-number color — e.g. `1. f3 2.` is still Black's turn).
+        const side = game?.turn
+          || (last.endsWith(':black') ? 'black' : 'white');
         clock.press(side);
       } else if (force) {
         clock.reset();

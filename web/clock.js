@@ -9,7 +9,7 @@ export const CLOCK_MODES = {
   },
   notation: {
     label: 'Notation pause',
-    description: 'Pauses while typing. Move numbers (1. 2. 3.) press the clock; you can edit until the next number.',
+    description: 'Pauses while typing. Move numbers press the clock for the side to move; edit freely until the next number.',
   },
 };
 

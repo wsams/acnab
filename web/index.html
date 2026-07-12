@@ -57,13 +57,13 @@
 
       <div class="clock-panel" id="clock-panel">
         <div class="clock-faces">
-          <div class="clock-face" data-side="black" id="clock-black">
-            <span class="clock-label">Black</span>
-            <span class="clock-time" id="clock-black-time">10:00</span>
-          </div>
-          <div class="clock-face" data-side="white" id="clock-white">
+          <div class="clock-face is-light-side" data-side="white" id="clock-white">
             <span class="clock-label">White</span>
             <span class="clock-time" id="clock-white-time">10:00</span>
+          </div>
+          <div class="clock-face is-dark-side" data-side="black" id="clock-black">
+            <span class="clock-label">Black</span>
+            <span class="clock-time" id="clock-black-time">10:00</span>
           </div>
         </div>
         <div class="clock-controls">
@@ -184,7 +184,7 @@
           <li>Also accepted: numbered half-moves (<code>1. e4 2. e5 3. Nf3</code>), repeated turn numbers (<code>1. e4 1. e5</code>), or Black dots (<code>1... e5</code>).</li>
           <li>Legacy coordinates: <code>Pf2f4</code>, <code>Nb8c6</code>.</li>
           <li>Captures show beside the board with a running material score.</li>
-          <li><strong>Notation pause</strong> clock: typing pauses the timer; typing the next move number (<code>2.</code>, <code>3.</code>, or <code>1...</code>) presses the clock. Edit freely until then.</li>
+          <li><strong>Notation pause</strong> clock: typing pauses the timer; typing a move number (<code>1.</code>, <code>2.</code>, <code>1...</code>) presses the clock for the side to move. Edit freely until then.</li>
           <li><strong>Live</strong> clock: follows each completed move and keeps running while you type.</li>
           <li>Flip the board for couch co-op without turning the device.</li>
         </ul>
