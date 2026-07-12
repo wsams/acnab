@@ -32,12 +32,9 @@
   <header class="site-header">
     <div class="brand-block">
       <p class="brand">acnab</p>
-      <p class="tagline">Chess notation, rendered live — free to play in your browser.</p>
+      <p class="tagline">Chess notation, live on the board.</p>
     </div>
     <nav class="header-actions" aria-label="Site links">
-      <a class="play-pill" href="#board-stage" data-focus-moves>
-        Play free on GitHub Pages
-      </a>
       <a
         class="github-link"
         href="https://github.com/wsams/acnab"
@@ -49,36 +46,50 @@
   </header>
 
   <main class="app-shell">
-    <section class="stage panel-board" id="board-stage">
-      <div class="stage-heading">
-        <div>
-          <p class="eyebrow">Live board</p>
-          <h1>Type moves. Watch the position unfold.</h1>
-        </div>
-        <div class="toolbar">
-          <label class="field compact-field">
-            <span>Theme</span>
-            <select id="theme-select" aria-label="Color theme">
-              <optgroup label="Dark">
-                <option value="walnut" selected>Walnut</option>
-                <option value="ink">Ink</option>
-                <option value="midnight">Midnight</option>
-                <option value="ember">Ember</option>
-                <option value="slate">Slate</option>
-                <option value="ocean">Ocean</option>
-              </optgroup>
-              <optgroup label="Light">
-                <option value="meadow">Meadow</option>
-                <option value="parchment">Parchment</option>
-                <option value="frost">Frost</option>
-              </optgroup>
-            </select>
-          </label>
+    <section class="panel panel-board" id="board-stage">
+      <div class="board-toolbar">
+        <div id="status" class="status-card"></div>
+        <div class="board-actions">
+          <button id="flip-board" type="button" class="button ghost" aria-pressed="false">Flip board</button>
           <button id="new-game" type="button" class="button ghost">New board</button>
         </div>
       </div>
 
-      <div id="status" class="status-card"></div>
+      <div class="clock-panel" id="clock-panel">
+        <div class="clock-faces">
+          <div class="clock-face" data-side="black" id="clock-black">
+            <span class="clock-label">Black</span>
+            <span class="clock-time" id="clock-black-time">10:00</span>
+          </div>
+          <div class="clock-face" data-side="white" id="clock-white">
+            <span class="clock-label">White</span>
+            <span class="clock-time" id="clock-white-time">10:00</span>
+          </div>
+        </div>
+        <div class="clock-controls">
+          <label class="field compact-field">
+            <span>Clock</span>
+            <select id="clock-preset" aria-label="Clock preset"></select>
+          </label>
+          <label class="field compact-field">
+            <span>Mode</span>
+            <select id="clock-mode" aria-label="Clock mode">
+              <option value="live">Live</option>
+              <option value="notation" selected>Notation pause</option>
+            </select>
+          </label>
+          <button id="clock-reset" type="button" class="button ghost">Reset clock</button>
+        </div>
+        <p id="clock-hint" class="clock-hint"></p>
+      </div>
+
+      <div class="board-layout">
+        <aside class="captures captures-black" id="captures-black" aria-label="Pieces captured by black"></aside>
+        <div id="board" class="board" aria-live="polite"></div>
+        <aside class="captures captures-white" id="captures-white" aria-label="Pieces captured by white"></aside>
+      </div>
+
+      <div class="scoreboard" id="scoreboard" aria-live="polite"></div>
 
       <div class="board-summary">
         <div>
@@ -91,54 +102,91 @@
         </div>
       </div>
 
-      <div id="board" class="board" aria-live="polite"></div>
       <ol id="moves-list" class="moves-list"></ol>
     </section>
 
-    <section class="panel panel-controls">
-      <div class="panel-heading">
-        <div>
-          <p class="eyebrow">Notation</p>
-          <h2>Work with standard chess notation</h2>
-        </div>
+    <section class="panel panel-notation">
+      <div class="panel-heading compact-heading">
+        <p class="eyebrow">Notation</p>
+        <h1>Moves</h1>
       </div>
 
       <form id="render-form" class="controls-stack">
         <label class="field">
-          <span>Moves</span>
-          <textarea id="moves" name="moves" rows="10" spellcheck="false" placeholder="1. e4 e5 2. Nf3 Nc6 3. Bb5 a6"></textarea>
+          <span class="visually-hidden">Moves</span>
+          <textarea id="moves" name="moves" rows="8" spellcheck="false" placeholder="1. e4 e5 2. Nf3 Nc6 3. Bb5 a6"></textarea>
         </label>
         <div class="actions">
-          <button type="submit" class="button primary">Render board</button>
-          <button type="button" id="copy-pgn" class="button ghost">Copy notation</button>
-          <button type="button" id="load-demo" class="button ghost">Try a demo</button>
+          <button type="submit" class="button primary">Render</button>
+          <button type="button" id="copy-pgn" class="button ghost">Copy</button>
+          <button type="button" id="load-demo" class="button ghost">Demo</button>
         </div>
         <div id="feedback" class="feedback" role="status" aria-live="polite"></div>
       </form>
+    </section>
+
+    <section class="panel panel-settings">
+      <div class="panel-heading compact-heading">
+        <p class="eyebrow">Controls</p>
+        <h2>Look &amp; saves</h2>
+      </div>
+
+      <div class="settings-stack">
+        <label class="field">
+          <span>Theme</span>
+          <select id="theme-select" aria-label="Color theme">
+            <optgroup label="Dark">
+              <option value="walnut" selected>Walnut</option>
+              <option value="ink">Ink</option>
+              <option value="midnight">Midnight</option>
+              <option value="ember">Ember</option>
+              <option value="slate">Slate</option>
+              <option value="ocean">Ocean</option>
+            </optgroup>
+            <optgroup label="Light">
+              <option value="meadow">Meadow</option>
+              <option value="parchment">Parchment</option>
+              <option value="frost">Frost</option>
+            </optgroup>
+          </select>
+        </label>
+        <label class="field">
+          <span>Piece set</span>
+          <select id="piece-set-select" aria-label="Piece set"></select>
+        </label>
+        <label class="field">
+          <span>Piece colors</span>
+          <select id="piece-palette-select" aria-label="Piece color palette"></select>
+        </label>
+        <div id="piece-palette-swatches" class="palette-swatches" role="listbox" aria-label="Piece color presets"></div>
+      </div>
 
       <div class="storage-panel">
         <div class="storage-header">
-          <h3>Local browser saves</h3>
-          <p>Your saved games stay in this browser via localStorage.</p>
+          <h3>Local saves</h3>
+          <p>Stored in this browser only.</p>
         </div>
         <div class="storage-controls">
           <label class="field">
             <span>Save name</span>
             <input id="save-name" type="text" placeholder="Ruy Lopez demo" />
           </label>
-          <button id="save-game" type="button" class="button primary">Save locally</button>
+          <button id="save-game" type="button" class="button primary">Save</button>
         </div>
         <div id="saved-games" class="saved-games"></div>
       </div>
 
       <details class="help-card">
-        <summary>Supported notation and tips</summary>
+        <summary>Notation tips</summary>
         <ul>
-          <li>Standard SAN/PGN is supported: <code>e4</code>, <code>Nf3</code>, <code>O-O</code>, <code>Qxd5+</code>, <code>c8=Q#</code>.</li>
-          <li>Legacy coordinate moves still work for compatibility: <code>Pf2f4</code>, <code>Nb8c6</code>.</li>
-          <li>The board updates as you type, and the current draft is restored automatically.</li>
-          <li>This site runs entirely in your browser — no account, no install, free on GitHub Pages. Source on <a href="https://github.com/wsams/acnab" rel="noopener noreferrer">GitHub</a>.</li>
-          <li>CLI companions: <code>python3 chess.py --print-completion bash</code> or <code>fish</code>.</li>
+          <li>SAN/PGN: <code>e4</code>, <code>Nf3</code>, <code>O-O</code>, <code>Qxd5+</code>, <code>c8=Q#</code>.</li>
+          <li>Standard numbering pairs both sides on one turn: <code>1. e4 e5 2. Nf3 Nc6</code>.</li>
+          <li>Also accepted: numbered half-moves (<code>1. e4 2. e5 3. Nf3</code>), repeated turn numbers (<code>1. e4 1. e5</code>), or Black dots (<code>1... e5</code>).</li>
+          <li>Legacy coordinates: <code>Pf2f4</code>, <code>Nb8c6</code>.</li>
+          <li>Captures show beside the board with a running material score.</li>
+          <li><strong>Notation pause</strong> clock: typing pauses the timer; typing the next move number (<code>2.</code>, <code>3.</code>, or <code>1...</code>) presses the clock. Edit freely until then.</li>
+          <li><strong>Live</strong> clock: follows each completed move and keeps running while you type.</li>
+          <li>Flip the board for couch co-op without turning the device.</li>
         </ul>
       </details>
     </section>
@@ -146,8 +194,7 @@
 
   <footer class="site-footer">
     <p>
-      <strong>acnab</strong> is free to use in the browser on GitHub Pages.
-      Notation stays on your device.
+      <strong>acnab</strong> is free on GitHub Pages.
       Source on
       <a href="https://github.com/wsams/acnab" rel="noopener noreferrer">GitHub</a>.
     </p>

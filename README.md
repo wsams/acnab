@@ -50,7 +50,8 @@ GitHub Pages publishes the static UI from `web/` (the site root redirects there)
 
 - live board updates while typing
 - localStorage drafts and named saves
-- theme switching plus FEN/status summaries
+- theme, SVG piece-set, and piece-color switching plus FEN/status summaries
+- flip board for couch co-op
 - no CDN runtime dependency for the chess engine
 
 ### Local static preview

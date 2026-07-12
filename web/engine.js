@@ -10,11 +10,6 @@ const PIECE_NAMES = {
   k: 'king',
 };
 
-const UNICODE = {
-  w: { k: '♔', q: '♕', r: '♖', b: '♗', n: '♘', p: '♙' },
-  b: { k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' },
-};
-
 const COMMENT_RE = /\{[^{}]*\}|;[^\n]*/g;
 const NAG_RE = /\$\d+/g;
 const VARIATION_RE = /\([^()]*\)/g;
@@ -84,9 +79,20 @@ function parseLegacyMove(chess, token) {
   return move;
 }
 
+const MATERIAL = {
+  p: 1,
+  n: 3,
+  b: 3,
+  r: 5,
+  q: 9,
+};
+
+const CAPTURE_ORDER = ['q', 'r', 'b', 'n', 'p'];
+
 function applyMoves(movesText) {
   const chess = new Chess();
   const appliedSan = [];
+  const captures = { white: [], black: [] };
 
   tokenizeMovetext(movesText).forEach((token, index) => {
     let move = null;
@@ -111,9 +117,35 @@ function applyMoves(movesText) {
     }
 
     appliedSan.push(move.san);
+    if (move.captured) {
+      const taker = move.color === 'w' ? 'white' : 'black';
+      captures[taker].push(move.captured);
+    }
   });
 
-  return { chess, appliedSan };
+  return { chess, appliedSan, captures };
+}
+
+function sortCaptures(types) {
+  return [...types].sort((a, b) => CAPTURE_ORDER.indexOf(a) - CAPTURE_ORDER.indexOf(b));
+}
+
+function materialScore(types) {
+  return types.reduce((total, type) => total + (MATERIAL[type] || 0), 0);
+}
+
+function capturesPayload(captures) {
+  const white = sortCaptures(captures.white);
+  const black = sortCaptures(captures.black);
+  const whiteScore = materialScore(white);
+  const blackScore = materialScore(black);
+  return {
+    white,
+    black,
+    whiteScore,
+    blackScore,
+    advantage: whiteScore - blackScore,
+  };
 }
 
 function squarePayload(chess, squareName) {
@@ -130,10 +162,10 @@ function squarePayload(chess, squareName) {
   }
 
   payload.piece = {
+    type: piece.type,
     symbol: piece.color === 'w' ? piece.type.toUpperCase() : piece.type,
     name: PIECE_NAMES[piece.type],
     color: piece.color === 'w' ? 'white' : 'black',
-    unicode: UNICODE[piece.color][piece.type],
   };
   return payload;
 }
@@ -179,9 +211,34 @@ export function emptyGame() {
   return renderGame('');
 }
 
+/** Move-number markers in notation that act as clock presses. */
+export function listMoveNumberMarkers(movesText) {
+  const text = String(movesText ?? '');
+  const markers = [];
+  const re = /\b(\d+)\.(?:\.\.)?/g;
+  let match = re.exec(text);
+  while (match) {
+    const raw = match[0];
+    markers.push({
+      number: Number(match[1]),
+      side: raw.endsWith('...') ? 'black' : 'white',
+      index: match.index,
+      raw,
+    });
+    match = re.exec(text);
+  }
+  return markers;
+}
+
+export function moveNumberSignature(movesText) {
+  return listMoveNumberMarkers(movesText)
+    .map((marker) => `${marker.number}:${marker.side}`)
+    .join('|');
+}
+
 export function renderGame(movesText) {
   const input = String(movesText ?? '');
-  const { chess, appliedSan } = applyMoves(input);
+  const { chess, appliedSan, captures } = applyMoves(input);
   const isGameOver = chess.isGameOver();
   let result = null;
   if (isGameOver) {
@@ -204,5 +261,6 @@ export function renderGame(movesText) {
     result,
     status: gameStatus(chess),
     board: boardPayload(chess),
+    captures: capturesPayload(captures),
   };
 }
