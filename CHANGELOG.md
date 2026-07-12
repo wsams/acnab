@@ -1,3 +1,10 @@
+## [1.2.1](https://github.com/wsams/acnab/compare/v1.2.0...v1.2.1) (2026-07-12)
+
+
+### Bug Fixes
+
+* Improve clock ([a502a3d](https://github.com/wsams/acnab/commit/a502a3d16f70e5feb59ab7d667b7b5bb05d38397))
+
 # [1.2.0](https://github.com/wsams/acnab/compare/v1.1.2...v1.2.0) (2026-07-12)
 
 
