@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/wsams/acnab/compare/v1.1.2...v1.2.0) (2026-07-12)
+
+
+### Features
+
+* Web redesign ([c2bc236](https://github.com/wsams/acnab/commit/c2bc2369dcbf95b09386f20a4b1273252cc0d564))
+
 ## [1.1.2](https://github.com/wsams/acnab/compare/v1.1.1...v1.1.2) (2026-07-11)
 
 
