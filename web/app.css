@@ -418,16 +418,49 @@ code {
   display: grid;
   gap: 1rem;
   grid-template-columns: minmax(0, 1.15fr) minmax(240px, 0.78fr) minmax(220px, 0.7fr);
+  grid-template-areas:
+    "board notation settings"
+    "meta notation settings";
   align-items: start;
 }
 
-/* Lets board + notation stay grid children on desktop. */
+/* Lets board + notation + meta participate in the app-shell grid on desktop. */
 .play-stage {
   display: contents;
 }
 
+.panel-board {
+  grid-area: board;
+}
+
+.panel-board-meta {
+  grid-area: meta;
+}
+
+.panel-notation {
+  grid-area: notation;
+}
+
+.panel-settings {
+  grid-area: settings;
+}
+
+/* Desktop keeps opponent setup above the moves field even though the form is first in the DOM. */
+.panel-notation .panel-heading {
+  order: 0;
+}
+
+.panel-notation .cpu-panel {
+  order: 1;
+}
+
+.panel-notation .controls-stack {
+  order: 2;
+}
+
 .notation-dock-handle {
   display: none;
+  order: -1;
 }
 
 .board-extras {
@@ -470,6 +503,7 @@ code {
 }
 
 .panel-board,
+.panel-board-meta,
 .panel-notation,
 .panel-settings {
   display: flex;
@@ -1217,10 +1251,10 @@ textarea {
 @media (max-width: 1100px) {
   .app-shell {
     grid-template-columns: minmax(0, 1.15fr) minmax(250px, 0.85fr);
-  }
-
-  .panel-settings {
-    grid-column: 1 / -1;
+    grid-template-areas:
+      "board notation"
+      "meta notation"
+      "settings settings";
   }
 }
 
@@ -1243,7 +1277,7 @@ textarea {
   }
 
   .panel-board {
-    order: 0;
+    order: 1;
     flex: 1 1 auto;
     min-height: 0;
     gap: 0.55rem;
@@ -1251,7 +1285,7 @@ textarea {
   }
 
   .panel-notation {
-    order: 1;
+    order: 2;
     position: sticky;
     bottom: 0;
     z-index: 40;
@@ -1270,8 +1304,18 @@ textarea {
     backdrop-filter: blur(18px);
   }
 
+  /* Moves field sits directly under the board; CPU / new-match come after. */
+  .panel-notation .controls-stack {
+    order: 1;
+  }
+
+  .panel-notation .cpu-panel {
+    order: 2;
+  }
+
   .notation-dock-handle {
     display: block;
+    order: 0;
     width: 2.6rem;
     height: 0.28rem;
     margin: 0.15rem auto 0.2rem;
@@ -1279,9 +1323,14 @@ textarea {
     background: color-mix(in srgb, var(--muted) 55%, transparent);
   }
 
+  .panel-board-meta {
+    order: 3;
+    gap: 0.55rem;
+    padding: 0.7rem;
+  }
+
   .panel-settings {
     order: 2;
-    grid-column: auto;
     margin-top: 0.35rem;
   }
 
@@ -1329,8 +1378,22 @@ textarea {
   }
 
   .board-layout {
-    grid-template-columns: 1fr;
-    gap: 0.4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  /* Keep both capture rows above the board so notation can sit directly under it. */
+  .captures-black {
+    order: 1;
+  }
+
+  .captures-white {
+    order: 2;
+  }
+
+  .board-layout .board {
+    order: 3;
   }
 
   .captures {
@@ -1402,9 +1465,10 @@ textarea {
   body.is-editing-moves .site-header,
   body.is-editing-moves .site-footer,
   body.is-editing-moves .panel-settings,
+  body.is-editing-moves .panel-board-meta,
   body.is-editing-moves .board-actions,
-  body.is-editing-moves .scoreboard,
   body.is-editing-moves .board-extras,
+  body.is-editing-moves .cpu-panel,
   body.is-editing-moves .cpu-controls,
   body.is-editing-moves .coin-stage {
     display: none;

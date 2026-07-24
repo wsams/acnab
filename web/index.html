@@ -89,23 +89,6 @@
         <div id="board" class="board" aria-live="polite"></div>
         <aside class="captures captures-white" id="captures-white" aria-label="Pieces captured by white"></aside>
       </div>
-
-      <div class="scoreboard" id="scoreboard" aria-live="polite"></div>
-
-      <details class="board-extras">
-        <summary>FEN &amp; move list</summary>
-        <div class="board-summary">
-          <div>
-            <span class="summary-label">FEN</span>
-            <code id="fen"></code>
-          </div>
-          <div>
-            <span class="summary-label">Moves</span>
-            <span id="move-count">0</span>
-          </div>
-        </div>
-        <ol id="moves-list" class="moves-list"></ol>
-      </details>
     </section>
 
     <section class="panel panel-notation" id="notation-dock">
@@ -114,6 +97,19 @@
         <p class="eyebrow">Notation</p>
         <h1>Moves</h1>
       </div>
+
+      <form id="render-form" class="controls-stack">
+        <label class="field">
+          <span class="visually-hidden">Moves</span>
+          <textarea id="moves" name="moves" rows="8" spellcheck="false" placeholder="1. e4 e5 2. Nf3 Nc6 3. Bb5 a6" enterkeyhint="done" autocomplete="off" autocapitalize="off"></textarea>
+        </label>
+        <div class="actions">
+          <button type="submit" class="button primary">Render</button>
+          <button type="button" id="copy-pgn" class="button ghost">Copy</button>
+          <button type="button" id="load-demo" class="button ghost">Demo</button>
+        </div>
+        <div id="feedback" class="feedback" role="status" aria-live="polite"></div>
+      </form>
 
       <div class="cpu-panel" id="cpu-panel" data-enabled="false">
         <div class="cpu-panel-header">
@@ -152,19 +148,25 @@
           <p class="cpu-status" id="cpu-status" role="status"></p>
         </div>
       </div>
+    </section>
 
-      <form id="render-form" class="controls-stack">
-        <label class="field">
-          <span class="visually-hidden">Moves</span>
-          <textarea id="moves" name="moves" rows="8" spellcheck="false" placeholder="1. e4 e5 2. Nf3 Nc6 3. Bb5 a6" enterkeyhint="done" autocomplete="off" autocapitalize="off"></textarea>
-        </label>
-        <div class="actions">
-          <button type="submit" class="button primary">Render</button>
-          <button type="button" id="copy-pgn" class="button ghost">Copy</button>
-          <button type="button" id="load-demo" class="button ghost">Demo</button>
+    <section class="panel panel-board-meta" id="board-meta" aria-label="Game details">
+      <div class="scoreboard" id="scoreboard" aria-live="polite"></div>
+
+      <details class="board-extras">
+        <summary>FEN &amp; move list</summary>
+        <div class="board-summary">
+          <div>
+            <span class="summary-label">FEN</span>
+            <code id="fen"></code>
+          </div>
+          <div>
+            <span class="summary-label">Moves</span>
+            <span id="move-count">0</span>
+          </div>
         </div>
-        <div id="feedback" class="feedback" role="status" aria-live="polite"></div>
-      </form>
+        <ol id="moves-list" class="moves-list"></ol>
+      </details>
     </section>
     </div>
 
