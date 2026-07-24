@@ -1,9 +1,16 @@
-import { emptyGame, moveNumberSignature, renderGame } from './engine.js';
+import { emptyGame, formatMovetext, moveNumberSignature, renderGame, sanFromUci } from './engine.js';
 import {
   CLOCK_MODES,
   CLOCK_PRESETS,
   ChessClock,
 } from './clock.js';
+import {
+  CPU_LEVELS,
+  DEFAULT_CPU_LEVEL,
+  StockfishCpu,
+  resolveCpuLevel,
+  tossCoinForSides,
+} from './cpu.js';
 import {
   PIECE_PALETTES,
   PIECE_SETS,
@@ -24,6 +31,7 @@ const STORAGE_KEYS = {
   flipped: 'acnab:board-flipped',
   clockPreset: 'acnab:clock-preset',
   clockMode: 'acnab:clock-mode',
+  cpuLevel: 'acnab:cpu-level',
 };
 
 const DEMO_MOVES = '1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7';
@@ -70,7 +78,19 @@ const state = {
   clockMoveSig: '',
   requestTimer: null,
   typingResumeTimer: null,
+  cpu: {
+    enabled: false,
+    levelId: resolveCpuLevel(localStorage.getItem(STORAGE_KEYS.cpuLevel)),
+    humanSide: null,
+    cpuSide: null,
+    tossing: false,
+    thinking: false,
+    requestId: 0,
+    lastThoughtFen: null,
+  },
 };
+
+const stockfish = new StockfishCpu();
 
 const elements = {
   board: document.querySelector('#board'),
@@ -105,6 +125,17 @@ const elements = {
   copyPgn: document.querySelector('#copy-pgn'),
   saveGame: document.querySelector('#save-game'),
   loadDemo: document.querySelector('#load-demo'),
+  cpuPanel: document.querySelector('#cpu-panel'),
+  cpuToggle: document.querySelector('#cpu-toggle'),
+  cpuControls: document.querySelector('#cpu-controls'),
+  cpuLevel: document.querySelector('#cpu-level'),
+  cpuLevelHint: document.querySelector('#cpu-level-hint'),
+  cpuNewMatch: document.querySelector('#cpu-new-match'),
+  cpuMatch: document.querySelector('#cpu-match'),
+  coinStage: document.querySelector('#coin-stage'),
+  coin: document.querySelector('#coin'),
+  coinCaption: document.querySelector('#coin-caption'),
+  cpuStatus: document.querySelector('#cpu-status'),
 };
 
 const clock = new ChessClock({
@@ -210,6 +241,286 @@ function populateClockControls() {
   elements.clockPreset.value = state.clockPreset;
   elements.clockMode.value = state.clockMode;
   updateClockHint();
+}
+
+function populateCpuControls() {
+  if (!elements.cpuLevel) {
+    return;
+  }
+  elements.cpuLevel.innerHTML = Object.values(CPU_LEVELS)
+    .map((level) => `<option value="${escapeHtml(level.id)}">${escapeHtml(level.label)}</option>`)
+    .join('');
+  elements.cpuLevel.value = state.cpu.levelId;
+  updateCpuLevelHint();
+  paintCpuUi();
+}
+
+function updateCpuLevelHint() {
+  if (!elements.cpuLevelHint) {
+    return;
+  }
+  const level = CPU_LEVELS[state.cpu.levelId];
+  elements.cpuLevelHint.textContent = level?.description ?? '';
+}
+
+function sideLabel(side) {
+  const names = getPaletteSideNames(state.piecePalette);
+  return side === 'white' ? names.white : names.black;
+}
+
+function paintCpuUi() {
+  const { enabled, tossing, thinking, humanSide, levelId } = state.cpu;
+  elements.cpuPanel?.setAttribute('data-enabled', enabled ? 'true' : 'false');
+  elements.cpuPanel?.classList.toggle('is-thinking', thinking);
+  elements.cpuPanel?.classList.toggle('is-tossing', tossing);
+
+  if (elements.cpuToggle) {
+    elements.cpuToggle.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+    elements.cpuToggle.textContent = enabled ? 'CPU on' : 'CPU off';
+  }
+  if (elements.cpuControls) {
+    elements.cpuControls.hidden = !enabled;
+  }
+  if (elements.cpuMatch) {
+    elements.cpuMatch.hidden = !enabled;
+  }
+  if (elements.cpuLevel) {
+    elements.cpuLevel.value = levelId;
+    elements.cpuLevel.disabled = tossing || thinking;
+  }
+  if (elements.cpuNewMatch) {
+    elements.cpuNewMatch.disabled = tossing || thinking;
+  }
+  if (elements.cpuToggle) {
+    elements.cpuToggle.disabled = tossing;
+  }
+
+  if (!enabled) {
+    if (elements.cpuStatus) {
+      elements.cpuStatus.textContent = '';
+    }
+    if (elements.coinCaption) {
+      elements.coinCaption.textContent = 'Coin toss decides who plays White.';
+    }
+    elements.coinStage?.classList.remove('is-spinning', 'is-resolved');
+    return;
+  }
+
+  if (tossing) {
+    if (elements.cpuStatus) {
+      elements.cpuStatus.textContent = 'Tossing for White…';
+    }
+    if (elements.coinCaption) {
+      elements.coinCaption.textContent = 'Heads: you play White. Tails: CPU plays White.';
+    }
+    return;
+  }
+
+  if (!humanSide) {
+    if (elements.cpuStatus) {
+      elements.cpuStatus.textContent = 'Start a match to toss for sides.';
+    }
+    return;
+  }
+
+  const level = CPU_LEVELS[levelId];
+  if (thinking) {
+    elements.cpuStatus.textContent = `Stockfish (${level.label}) is thinking…`;
+    return;
+  }
+
+  if (state.game?.isGameOver) {
+    elements.cpuStatus.textContent = `Match over · you are ${sideLabel(humanSide)}. ${state.game.status}`;
+    return;
+  }
+
+  if (state.game?.turn === humanSide) {
+    elements.cpuStatus.textContent = `Your turn as ${sideLabel(humanSide)} · enter a move in notation.`;
+  } else {
+    elements.cpuStatus.textContent = `CPU to move as ${sideLabel(state.cpu.cpuSide)}.`;
+  }
+}
+
+function cancelCpuSearch() {
+  state.cpu.requestId += 1;
+  state.cpu.thinking = false;
+  state.cpu.lastThoughtFen = null;
+  try {
+    stockfish.stop();
+  } catch {
+    // ignore
+  }
+  paintCpuUi();
+}
+
+async function setCpuEnabled(enabled) {
+  if (enabled === state.cpu.enabled) {
+    return;
+  }
+
+  if (!enabled) {
+    cancelCpuSearch();
+    state.cpu.enabled = false;
+    state.cpu.humanSide = null;
+    state.cpu.cpuSide = null;
+    state.cpu.tossing = false;
+    paintCpuUi();
+    setFeedback('CPU player turned off. Notation-only mode.');
+    return;
+  }
+
+  state.cpu.enabled = true;
+  paintCpuUi();
+  setFeedback('Loading Stockfish…');
+  try {
+    await stockfish.applyLevel(state.cpu.levelId);
+  } catch (error) {
+    state.cpu.enabled = false;
+    paintCpuUi();
+    setFeedback(error.message || 'Could not start Stockfish in this browser.', true);
+    return;
+  }
+
+  await startCpuMatch({ announceEngine: false });
+}
+
+async function applyCpuLevel(levelId) {
+  const next = resolveCpuLevel(levelId);
+  state.cpu.levelId = next;
+  localStorage.setItem(STORAGE_KEYS.cpuLevel, next);
+  updateCpuLevelHint();
+  paintCpuUi();
+  if (!state.cpu.enabled) {
+    return;
+  }
+  try {
+    await stockfish.applyLevel(next);
+    setFeedback(`CPU strength set to ${CPU_LEVELS[next].label}.`);
+    maybeRequestCpuMove(state.game);
+  } catch (error) {
+    setFeedback(error.message || 'Could not update CPU strength.', true);
+  }
+}
+
+async function startCpuMatch({ announceEngine = true } = {}) {
+  if (!state.cpu.enabled) {
+    return;
+  }
+
+  cancelCpuSearch();
+  state.cpu.tossing = true;
+  state.cpu.humanSide = null;
+  state.cpu.cpuSide = null;
+  paintCpuUi();
+
+  elements.moves.value = '';
+  elements.saveName.value = '';
+  state.clockMoveSig = '';
+  clock.reset();
+  updateBoard('', false, { skipCpu: true });
+
+  elements.coinStage?.classList.remove('is-resolved');
+  elements.coinStage?.classList.add('is-spinning');
+  if (elements.coin) {
+    elements.coin.dataset.face = 'heads';
+  }
+  if (elements.coinCaption) {
+    elements.coinCaption.textContent = 'Heads: you play White. Tails: CPU plays White.';
+  }
+
+  const result = await tossCoinForSides({ delayMs: 1500 });
+  if (!state.cpu.enabled) {
+    return;
+  }
+
+  state.cpu.humanSide = result.humanSide;
+  state.cpu.cpuSide = result.cpuSide;
+  state.cpu.tossing = false;
+
+  if (elements.coin) {
+    elements.coin.dataset.face = result.face;
+  }
+  elements.coinStage?.classList.remove('is-spinning');
+  elements.coinStage?.classList.add('is-resolved');
+
+  // Human sits at the near side of the board.
+  setBoardFlipped(result.humanSide === 'black');
+
+  const humanName = sideLabel(result.humanSide);
+  const faceLabel = result.face === 'heads' ? 'Heads' : 'Tails';
+  if (elements.coinCaption) {
+    elements.coinCaption.textContent = `${faceLabel}! You play ${humanName}.`;
+  }
+
+  paintCpuUi();
+  if (announceEngine) {
+    setFeedback(`${faceLabel} — you are ${humanName}. Enter moves in notation; Stockfish replies.`);
+  } else {
+    setFeedback(`${faceLabel} — you are ${humanName}. Stockfish is ready.`);
+  }
+
+  maybeRequestCpuMove(state.game);
+}
+
+async function maybeRequestCpuMove(game) {
+  if (!state.cpu.enabled || state.cpu.tossing || !state.cpu.cpuSide) {
+    return;
+  }
+  if (!game || game.isGameOver) {
+    if (state.cpu.thinking) {
+      cancelCpuSearch();
+    } else {
+      paintCpuUi();
+    }
+    return;
+  }
+  if (game.turn !== state.cpu.cpuSide) {
+    if (state.cpu.thinking) {
+      cancelCpuSearch();
+    } else {
+      paintCpuUi();
+    }
+    return;
+  }
+  if (state.cpu.thinking && state.cpu.lastThoughtFen === game.fen) {
+    return;
+  }
+
+  const requestId = state.cpu.requestId + 1;
+  state.cpu.requestId = requestId;
+  state.cpu.thinking = true;
+  state.cpu.lastThoughtFen = game.fen;
+  paintCpuUi();
+
+  try {
+    const uciMove = await stockfish.chooseMove(game.fen, { levelId: state.cpu.levelId });
+    if (requestId !== state.cpu.requestId || !state.cpu.enabled) {
+      return;
+    }
+    if (state.game.fen !== game.fen) {
+      return;
+    }
+
+    const san = sanFromUci(game.fen, uciMove);
+    const nextMoves = formatMovetext([...game.appliedMoves, san]);
+    elements.moves.value = nextMoves;
+    state.cpu.thinking = false;
+    state.cpu.lastThoughtFen = null;
+    updateBoard(nextMoves, false, { skipCpu: true });
+    setFeedback(`CPU played ${san}.`);
+    paintCpuUi();
+  } catch (error) {
+    if (requestId !== state.cpu.requestId) {
+      return;
+    }
+    state.cpu.thinking = false;
+    state.cpu.lastThoughtFen = null;
+    paintCpuUi();
+    if (error?.message === 'Search cancelled.') {
+      return;
+    }
+    setFeedback(error.message || 'CPU move failed.', true);
+  }
 }
 
 function updateClockHint() {
@@ -448,6 +759,7 @@ function applyPiecePalette(paletteId) {
   renderBoard(state.game);
   renderCaptures(state.game);
   paintClock();
+  paintCpuUi();
 }
 
 function setBoardFlipped(flipped) {
@@ -528,7 +840,7 @@ function renderStatus(game) {
   elements.moveCount.textContent = String(game.moveCount);
 }
 
-function paintGame(game) {
+function paintGame(game, { skipCpu = false } = {}) {
   const previousMoveCount = state.game?.moveCount ?? 0;
   state.game = game;
   renderBoard(game);
@@ -536,23 +848,31 @@ function paintGame(game) {
   renderMoves(game);
   renderStatus(game);
   syncClockFromNotation(elements.moves.value, game, { previousMoveCount });
+  if (!skipCpu) {
+    maybeRequestCpuMove(game);
+  } else {
+    paintCpuUi();
+  }
 }
 
-function updateBoard(moves, announce = true) {
+function updateBoard(moves, announce = true, { skipCpu = false } = {}) {
   state.draft = moves;
   localStorage.setItem(STORAGE_KEYS.draft, moves);
 
   try {
     const game = renderGame(moves);
-    paintGame(game);
+    paintGame(game, { skipCpu });
     if (announce) {
       setFeedback('Board updated.');
-    } else {
+    } else if (!state.cpu.enabled) {
       elements.feedback.textContent = '';
       elements.feedback.classList.remove('is-error');
     }
   } catch (error) {
     // Keep last good position; still handle notation clock presses from raw text.
+    if (state.cpu.enabled) {
+      cancelCpuSearch();
+    }
     syncClockFromNotation(moves, state.game);
     setFeedback(error.message, true);
   }
@@ -618,6 +938,10 @@ function drawSavedGames() {
 }
 
 function resetBoard() {
+  if (state.cpu.enabled) {
+    startCpuMatch();
+    return;
+  }
   elements.moves.value = '';
   elements.saveName.value = '';
   state.clockMoveSig = '';
@@ -665,6 +989,12 @@ function bindEvents() {
   elements.copyPgn.addEventListener('click', copyNotation);
   elements.loadDemo?.addEventListener('click', loadDemo);
 
+  elements.cpuToggle?.addEventListener('click', () => {
+    setCpuEnabled(!state.cpu.enabled);
+  });
+  elements.cpuLevel?.addEventListener('change', (event) => applyCpuLevel(event.target.value));
+  elements.cpuNewMatch?.addEventListener('click', () => startCpuMatch());
+
   document.querySelectorAll('[data-focus-moves]').forEach((node) => {
     node.addEventListener('click', (event) => {
       event.preventDefault();
@@ -710,6 +1040,7 @@ function bindEvents() {
 function bootstrap() {
   populatePieceControls();
   populateClockControls();
+  populateCpuControls();
   applyTheme(state.theme);
   applyPiecePaletteVars(state.piecePalette);
   document.documentElement.dataset.pieceSet = state.pieceSet;
@@ -721,13 +1052,13 @@ function bootstrap() {
   elements.moves.value = state.draft;
   syncFlipButton();
   paintClock();
-  paintGame(state.game);
+  paintGame(state.game, { skipCpu: true });
   drawSavedGames();
   bindEvents();
 
   if (state.draft) {
     state.clockMoveSig = moveNumberSignature(state.draft);
-    updateBoard(state.draft, false);
+    updateBoard(state.draft, false, { skipCpu: true });
   }
 
   document.body.classList.add('is-booted');

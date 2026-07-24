@@ -4,11 +4,11 @@
 
 **acnab** renders chess positions from standard chess notation in the terminal and in the browser.
 
-**Play it free right now:** [wsams.github.io/acnab/web](https://wsams.github.io/acnab/web/) — no install, no account. Type SAN/PGN moves and watch the board update live.
+**Play it free right now:** [wsams.github.io/acnab/web](https://wsams.github.io/acnab/web/) — no install, no account. Type SAN/PGN moves and watch the board update live. Optional **CPU player** (Stockfish in the browser) can be toggled on for a real game after a coin toss for White.
 
 ![acnab web UI — Midnight theme with Blush & Magenta pieces, dual clocks, live notation, and local saves](docs/web-ui.png)
 
-The browser UI shows the live board beside a Moves panel: type SAN/PGN, hit **Render**, and the position updates with FEN, material, and move history. Dual clocks, theme/piece-color presets, and browser-local saves sit alongside the board for over-the-board notation tracking.
+The browser UI shows the live board beside a Moves panel: type SAN/PGN, hit **Render**, and the position updates with FEN, material, and move history. Dual clocks, theme/piece-color presets, and browser-local saves sit alongside the board for over-the-board notation tracking. Turn on **CPU player** to face Stockfish at a chosen strength — input stays chess notation.
 
 ## CLI usage
 
@@ -56,7 +56,8 @@ GitHub Pages publishes the static UI from `web/` (the site root redirects there)
 - localStorage drafts and named saves
 - theme, SVG piece-set, and piece-color switching plus FEN/status summaries
 - flip board for couch co-op
-- no CDN runtime dependency for the chess engine
+- optional CPU opponent (Stockfish.js 18 WASM, skill/Elo presets) — off by default; coin toss for who plays White
+- no CDN runtime dependency for the chess engine (Stockfish is vendored under `web/vendor/stockfish/`, GPLv3)
 
 ### Local static preview
 

@@ -264,3 +264,33 @@ export function renderGame(movesText) {
     captures: capturesPayload(captures),
   };
 }
+
+/** Apply a UCI move ({from,to,promotion}) on a FEN and return the SAN string. */
+export function sanFromUci(fen, uciMove) {
+  const chess = new Chess(fen);
+  const move = chess.move({
+    from: uciMove.from,
+    to: uciMove.to,
+    promotion: uciMove.promotion,
+  });
+  if (!move) {
+    throw new Error(`Illegal engine move: ${uciMove.from}${uciMove.to}`);
+  }
+  return move.san;
+}
+
+/** Build standard paired SAN movetext from applied half-moves. */
+export function formatMovetext(sans) {
+  const moves = Array.isArray(sans) ? sans.filter(Boolean) : [];
+  if (!moves.length) {
+    return '';
+  }
+  const parts = [];
+  for (let index = 0; index < moves.length; index += 2) {
+    const turn = Math.floor(index / 2) + 1;
+    const white = moves[index];
+    const black = moves[index + 1];
+    parts.push(black ? `${turn}. ${white} ${black}` : `${turn}. ${white}`);
+  }
+  return parts.join(' ');
+}
