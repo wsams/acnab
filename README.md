@@ -96,4 +96,4 @@ npm run build:pages
 
 ### Releases
 
-Pushes to `master` run [semantic-release](https://semantic-release.gitbook.io/) via `.github/workflows/release.yml` (direct `npx semantic-release`, no third-party release action) and deploy the static site with `.github/workflows/pages.yml`.
+Pushes to `master` run [semantic-release](https://semantic-release.gitbook.io/) via `.github/workflows/release.yml` (direct `npx semantic-release`, no third-party release action). GitHub Pages publishes from the `master` branch (legacy); `.github/workflows/pages.yml` verifies `npm run build:pages` still produces a clean `_site/` artifact.
