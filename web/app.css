@@ -975,6 +975,144 @@ textarea {
   gap: 1rem;
 }
 
+.cpu-panel {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.85rem 0.95rem;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--status-bg) 70%, transparent);
+}
+
+.cpu-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.cpu-title {
+  font-size: 1rem;
+  margin: 0;
+}
+
+.cpu-controls {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.cpu-level-hint,
+.cpu-status,
+.coin-caption {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+.cpu-status {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.cpu-match {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.coin-stage {
+  display: grid;
+  justify-items: center;
+  gap: 0.55rem;
+  padding: 0.35rem 0 0.15rem;
+}
+
+.coin {
+  position: relative;
+  width: 3.1rem;
+  height: 3.1rem;
+  transform-style: preserve-3d;
+  transition: transform 0.35s ease;
+}
+
+.coin-face {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--accent) 55%, var(--border));
+  background:
+    radial-gradient(circle at 30% 28%, color-mix(in srgb, var(--accent-strong) 55%, #fff), transparent 42%),
+    linear-gradient(145deg, color-mix(in srgb, var(--accent) 70%, #fff), var(--accent));
+  color: var(--accent-ink);
+  font-family: "Syne", sans-serif;
+  font-weight: 800;
+  font-size: 1.15rem;
+  backface-visibility: hidden;
+  box-shadow: 0 10px 22px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.coin-tails {
+  transform: rotateY(180deg);
+  background:
+    radial-gradient(circle at 30% 28%, color-mix(in srgb, var(--muted) 35%, #fff), transparent 42%),
+    linear-gradient(145deg, color-mix(in srgb, var(--text) 18%, var(--bg-soft)), var(--bg-soft));
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.coin[data-face='tails'] {
+  transform: rotateY(180deg);
+}
+
+.coin-stage.is-spinning .coin {
+  animation: coin-flip 0.55s linear infinite;
+}
+
+.coin-stage.is-resolved .coin {
+  animation: coin-land 0.55s ease both;
+}
+
+.cpu-panel.is-thinking {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  animation: soft-pulse 1.8s ease-in-out infinite;
+}
+
+.cpu-panel[data-enabled='true'] #cpu-toggle {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+@keyframes coin-flip {
+  from {
+    transform: rotateY(0deg) translateY(0);
+  }
+  50% {
+    transform: rotateY(180deg) translateY(-0.35rem);
+  }
+  to {
+    transform: rotateY(360deg) translateY(0);
+  }
+}
+
+@keyframes coin-land {
+  from {
+    transform: rotateY(720deg) scale(1.08);
+  }
+  to {
+    transform: rotateY(var(--coin-end, 0deg)) scale(1);
+  }
+}
+
+.coin[data-face='heads'] {
+  --coin-end: 0deg;
+}
+
+.coin[data-face='tails'] {
+  --coin-end: 180deg;
+}
+
 .help-card ul {
   margin: 0.85rem 0 0;
   padding-left: 1.2rem;

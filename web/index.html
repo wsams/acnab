@@ -111,6 +111,44 @@
         <h1>Moves</h1>
       </div>
 
+      <div class="cpu-panel" id="cpu-panel" data-enabled="false">
+        <div class="cpu-panel-header">
+          <div>
+            <p class="eyebrow">Opponent</p>
+            <h2 class="cpu-title">CPU player</h2>
+          </div>
+          <button
+            id="cpu-toggle"
+            type="button"
+            class="button ghost"
+            aria-pressed="false"
+            title="Play against Stockfish in the browser"
+          >
+            CPU off
+          </button>
+        </div>
+
+        <div class="cpu-controls" id="cpu-controls" hidden>
+          <label class="field">
+            <span>Strength</span>
+            <select id="cpu-level" aria-label="CPU strength"></select>
+          </label>
+          <p id="cpu-level-hint" class="cpu-level-hint"></p>
+          <button id="cpu-new-match" type="button" class="button primary">New match (coin toss)</button>
+        </div>
+
+        <div class="cpu-match" id="cpu-match" hidden>
+          <div class="coin-stage" id="coin-stage" aria-live="polite">
+            <div class="coin" id="coin" data-face="heads" aria-hidden="true">
+              <div class="coin-face coin-heads">H</div>
+              <div class="coin-face coin-tails">T</div>
+            </div>
+            <p class="coin-caption" id="coin-caption">Coin toss decides who plays White.</p>
+          </div>
+          <p class="cpu-status" id="cpu-status" role="status"></p>
+        </div>
+      </div>
+
       <form id="render-form" class="controls-stack">
         <label class="field">
           <span class="visually-hidden">Moves</span>
@@ -187,6 +225,7 @@
           <li><strong>Notation pause</strong> clock: typing pauses the timer; typing a move number (<code>1.</code>, <code>2.</code>, <code>1...</code>) presses the clock for the side to move. Edit freely until then.</li>
           <li><strong>Live</strong> clock: follows each completed move and keeps running while you type.</li>
           <li>Flip the board for couch co-op without turning the device.</li>
+          <li><strong>CPU player</strong> (off by default): toss a coin for White, then enter your moves in notation — Stockfish replies automatically. Strength uses Stockfish skill / Elo limits from beginner through full engine.</li>
         </ul>
       </details>
     </section>
@@ -197,6 +236,9 @@
       <strong>acnab</strong> is free on GitHub Pages.
       Source on
       <a href="https://github.com/wsams/acnab" rel="noopener noreferrer">GitHub</a>.
+      Optional CPU opponent uses
+      <a href="https://github.com/nmrugg/stockfish.js" rel="noopener noreferrer">Stockfish.js</a>
+      (GPLv3).
     </p>
   </footer>
 
