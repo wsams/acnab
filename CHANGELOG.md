@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/wsams/acnab/compare/v1.2.1...v1.3.0) (2026-07-24)
+
+
+### Features
+
+* Add Stockfish CPU opponent with coin-toss sides ([#6](https://github.com/wsams/acnab/issues/6)) ([05a94d3](https://github.com/wsams/acnab/commit/05a94d30210f1a3196e3de6da36d727ff816edbe))
+
 ## [1.2.1](https://github.com/wsams/acnab/compare/v1.2.0...v1.2.1) (2026-07-12)
 
 
