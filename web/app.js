@@ -505,11 +505,19 @@ async function maybeRequestCpuMove(game) {
     }
 
     const san = sanFromUci(game.fen, uciMove);
-    const nextMoves = formatMovetext([...game.appliedMoves, san]);
+    const applied = [...game.appliedMoves, san];
+    // After White (CPU as first player), leave a trailing space so Black can type SAN.
+    // After Black, leave clean movetext — next `N. ` priming adds the spaced prefix.
+    let nextMoves = formatMovetext(applied);
+    if (applied.length % 2 === 1) {
+      nextMoves = ensureTrailingSanSpace(nextMoves);
+    }
     elements.moves.value = nextMoves;
     state.cpu.thinking = false;
     state.cpu.lastThoughtFen = null;
     updateBoard(nextMoves, false, { skipCpu: true });
+    const caret = nextMoves.length;
+    elements.moves.setSelectionRange(caret, caret);
     setFeedback(`CPU played ${san}.`);
     paintCpuUi();
   } catch (error) {
@@ -859,14 +867,31 @@ function paintGame(game, { skipCpu = false } = {}) {
   }
 }
 
-/** True when movetext already ends with `N.` / `N. ` for White's next turn. */
+/** True when movetext already ends with `N. ` (space after the period) for White. */
 function hasTrailingMoveNumber(text, moveNumber) {
-  return new RegExp(`(?:^|\\s)${moveNumber}\\.\\s*$`).test(String(text ?? ''));
+  return new RegExp(`(?:^|\\s)${moveNumber}\\.\\s+$`).test(String(text ?? ''));
+}
+
+/** Ensure movetext ends with a single space so the next SAN can be typed immediately. */
+function ensureTrailingSanSpace(text) {
+  const value = String(text ?? '');
+  if (!value) {
+    return value;
+  }
+  return /\s$/.test(value) ? value : `${value} `;
+}
+
+/** Build `… N. ` with a guaranteed space after the period. */
+function withNextMoveNumberPrefix(text, nextNumber) {
+  let base = String(text ?? '').replace(/\s+$/, '');
+  base = base.replace(new RegExp(`(?:^|\\s)${nextNumber}\\.$`), '').replace(/\s+$/, '');
+  return base ? `${base} ${nextNumber}. ` : `${nextNumber}. `;
 }
 
 /**
  * After Black completes a move, wait briefly then type the next `N. `
  * so White can enter SAN without the number, period, and space.
+ * Also upgrades a bare trailing `N.` to `N. ` if the space is missing.
  */
 function queueNextMoveNumberPrime(game, previousMoveCount) {
   clearTimeout(state.moveNumberPrimeTimer);
@@ -879,11 +904,16 @@ function queueNextMoveNumberPrime(game, previousMoveCount) {
   if (game.moveCount % 2 !== 0 || game.turn !== 'white') {
     return;
   }
-  if (!(previousMoveCount < game.moveCount)) {
-    return;
-  }
+
   const nextNumber = game.moveCount / 2 + 1;
   if (hasTrailingMoveNumber(elements.moves.value, nextNumber)) {
+    return;
+  }
+
+  const blackJustMoved = previousMoveCount < game.moveCount;
+  const trimmed = elements.moves.value.replace(/\s+$/, '');
+  const endsWithBareNumber = new RegExp(`(?:^|\\s)${nextNumber}\\.$`).test(trimmed);
+  if (!blackJustMoved && !endsWithBareNumber) {
     return;
   }
 
@@ -913,8 +943,7 @@ function primeNextMoveNumber({ moveCount, fen }) {
     return;
   }
 
-  const base = current.replace(/\s+$/, '');
-  const next = base ? `${base} ${nextNumber}. ` : `${nextNumber}. `;
+  const next = withNextMoveNumberPrefix(current, nextNumber);
   const selectionStart = elements.moves.selectionStart;
   const selectionEnd = elements.moves.selectionEnd;
   const atEnd = selectionStart === current.length && selectionEnd === current.length;
