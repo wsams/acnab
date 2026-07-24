@@ -134,6 +134,20 @@
             <select id="cpu-level" aria-label="CPU strength"></select>
           </label>
           <p id="cpu-level-hint" class="cpu-level-hint"></p>
+          <div class="cpu-handicap-row">
+            <button
+              id="cpu-handicap"
+              type="button"
+              class="button ghost"
+              aria-pressed="true"
+              title="When on, the CPU spends about as long as you do on average so the clocks stay even"
+            >
+              Pace on
+            </button>
+            <p id="cpu-handicap-hint" class="cpu-level-hint">
+              Match your average think time (Mario Kart–style clock evening). On by default.
+            </p>
+          </div>
           <button id="cpu-new-match" type="button" class="button primary">New match (coin toss)</button>
         </div>
 
@@ -225,7 +239,7 @@
           <li><strong>Notation pause</strong> clock: typing pauses the timer; typing a move number (<code>1.</code>, <code>2.</code>, <code>1...</code>) presses the clock for the side to move. Edit freely until then.</li>
           <li><strong>Live</strong> clock: follows each completed move and keeps running while you type.</li>
           <li>Flip the board for couch co-op without turning the device.</li>
-          <li><strong>CPU player</strong> (off by default): toss a coin for White, then enter your moves in notation — Stockfish replies automatically. Strength uses Stockfish skill / Elo limits from beginner through full engine.</li>
+          <li><strong>CPU player</strong> (off by default): toss a coin for White, then enter your moves in notation — Stockfish replies automatically. Strength uses Stockfish skill / Elo limits from beginner through full engine. <strong>Pace</strong> (on by default) makes the CPU take about your average think time so the clocks stay even; turn it off for instant replies at the chosen strength.</li>
         </ul>
       </details>
     </section>
