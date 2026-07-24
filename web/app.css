@@ -1270,41 +1270,38 @@ textarea {
   .play-stage {
     display: flex;
     flex-direction: column;
-    gap: 0.45rem;
+    gap: 0;
     order: 1;
-    /* Keep board + dock as one composition in the first viewport. */
-    min-height: calc(100dvh - 4.25rem);
   }
 
+  /* One mobile play card: board on top, moves input immediately under it. */
   .panel-board {
     order: 1;
-    flex: 1 1 auto;
-    min-height: 0;
-    gap: 0.55rem;
-    padding: 0.7rem;
+    flex: 0 0 auto;
+    gap: 0.5rem;
+    padding: 0.7rem 0.7rem 0.45rem;
+    margin-bottom: 0;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    border-bottom-color: transparent;
+    box-shadow: none;
   }
 
   .panel-notation {
     order: 2;
-    position: sticky;
-    bottom: 0;
-    z-index: 40;
+    position: static;
     flex: 0 0 auto;
     gap: 0.55rem;
-    margin: 0 -0.15rem;
-    padding: 0.35rem 0.85rem calc(0.7rem + env(safe-area-inset-bottom, 0px));
-    border-radius: 1.15rem 1.15rem 0.35rem 0.35rem;
-    border-bottom-width: 0;
-    max-height: min(44dvh, 22rem);
-    overflow: auto;
-    overscroll-behavior: contain;
-    box-shadow:
-      0 -18px 40px rgba(0, 0, 0, 0.38),
-      0 -1px 0 color-mix(in srgb, var(--accent) 28%, transparent);
-    backdrop-filter: blur(18px);
+    margin: 0;
+    padding: 0.45rem 0.7rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+    max-height: none;
+    overflow: visible;
+    box-shadow: var(--shadow);
   }
 
-  /* Moves field sits directly under the board; CPU / new-match come after. */
+  /* Moves field first; CPU / new-match below the input. */
   .panel-notation .controls-stack {
     order: 1;
   }
@@ -1314,19 +1311,14 @@ textarea {
   }
 
   .notation-dock-handle {
-    display: block;
-    order: 0;
-    width: 2.6rem;
-    height: 0.28rem;
-    margin: 0.15rem auto 0.2rem;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--muted) 55%, transparent);
+    display: none;
   }
 
   .panel-board-meta {
     order: 3;
     gap: 0.55rem;
     padding: 0.7rem;
+    margin-top: 0.55rem;
   }
 
   .panel-settings {
@@ -1383,7 +1375,7 @@ textarea {
     gap: 0.35rem;
   }
 
-  /* Keep both capture rows above the board so notation can sit directly under it. */
+  /* Captures above the board so input sits directly under the squares. */
   .captures-black {
     order: 1;
   }
@@ -1408,7 +1400,7 @@ textarea {
   }
 
   .board {
-    width: min(100%, calc(100dvh - 19rem));
+    width: min(100%, 72vw);
     max-width: 22rem;
     margin-inline: auto;
   }
@@ -1461,7 +1453,7 @@ textarea {
     font-size: 0.88rem;
   }
 
-  /* While typing: prioritize dock + shrink chrome so board stays peeking above the keyboard. */
+  /* While typing: keep board + input paired; hide the rest. */
   body.is-editing-moves .site-header,
   body.is-editing-moves .site-footer,
   body.is-editing-moves .panel-settings,
@@ -1475,24 +1467,21 @@ textarea {
   }
 
   body.is-editing-moves .play-stage {
-    min-height: auto;
+    gap: 0;
   }
 
   body.is-editing-moves .panel-board {
-    padding: 0.55rem;
-    gap: 0.4rem;
+    padding: 0.55rem 0.55rem 0.35rem;
+    gap: 0.35rem;
   }
 
   body.is-editing-moves .board {
-    width: min(100%, 42dvh);
+    width: min(100%, 56vw);
     max-width: 18rem;
   }
 
   body.is-editing-moves .panel-notation {
-    max-height: min(56dvh, 26rem);
-    box-shadow:
-      0 -22px 48px rgba(0, 0, 0, 0.45),
-      0 -1px 0 color-mix(in srgb, var(--accent) 40%, transparent);
+    padding-top: 0.35rem;
   }
 
   body.is-editing-moves textarea {
@@ -1514,9 +1503,13 @@ textarea {
     padding: 0.85rem;
   }
 
+  .panel-board {
+    padding: 0.7rem 0.7rem 0.4rem;
+  }
+
   .panel-notation {
-    margin-left: -0.25rem;
-    margin-right: -0.25rem;
+    padding-left: 0.7rem;
+    padding-right: 0.7rem;
   }
 
   .board {
