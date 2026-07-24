@@ -107,8 +107,96 @@ export const CPU_LEVELS = {
 
 export const DEFAULT_CPU_LEVEL = 'intermediate';
 
+/** Pace handicap is on by default (Mario Kart–style clock evening). */
+export const DEFAULT_CPU_HANDICAP = true;
+
+/** Rolling window of human think-time samples used for CPU pacing. */
+export const CPU_PACE_SAMPLE_WINDOW = 6;
+
+/** Ignore near-instant samples (paste / bulk edits). */
+export const CPU_PACE_MIN_SAMPLE_MS = 300;
+
+/** Cap a single sample so AFK gaps don't dominate the average. */
+export const CPU_PACE_MAX_SAMPLE_MS = 180_000;
+
+/** Floor / ceiling for how long the CPU will wait to match pace. */
+export const CPU_PACE_MIN_TARGET_MS = 400;
+export const CPU_PACE_MAX_TARGET_MS = 120_000;
+
 export function resolveCpuLevel(id) {
   return CPU_LEVELS[id] ? id : DEFAULT_CPU_LEVEL;
+}
+
+export function resolveCpuHandicap(value) {
+  if (value === null || value === undefined || value === '') {
+    return DEFAULT_CPU_HANDICAP;
+  }
+  if (value === true || value === '1' || value === 'true' || value === 'on') {
+    return true;
+  }
+  if (value === false || value === '0' || value === 'false' || value === 'off') {
+    return false;
+  }
+  return DEFAULT_CPU_HANDICAP;
+}
+
+/** Clamp and accept a human think-time sample, or return null if it should be ignored. */
+export function normalizeHumanThinkSample(ms) {
+  const value = Number(ms);
+  if (!Number.isFinite(value) || value < CPU_PACE_MIN_SAMPLE_MS) {
+    return null;
+  }
+  return Math.min(value, CPU_PACE_MAX_SAMPLE_MS);
+}
+
+export function averageHumanThinkMs(samples, windowSize = CPU_PACE_SAMPLE_WINDOW) {
+  const list = Array.isArray(samples) ? samples.filter((n) => Number.isFinite(n) && n > 0) : [];
+  if (!list.length) {
+    return null;
+  }
+  const window = list.slice(-Math.max(1, windowSize));
+  const total = window.reduce((sum, value) => sum + value, 0);
+  return total / window.length;
+}
+
+/**
+ * Target wall-clock think time for the CPU.
+ * When handicap is on and we have human samples, match that average so clocks stay even.
+ * Strength search limits stay on the skill preset; extra time is idle pacing.
+ */
+export function cpuPaceTargetMs({ handicap, samples, fallbackMs }) {
+  const fallback = Math.max(CPU_PACE_MIN_TARGET_MS, Number(fallbackMs) || CPU_PACE_MIN_TARGET_MS);
+  if (!handicap) {
+    return fallback;
+  }
+  const average = averageHumanThinkMs(samples);
+  if (average == null) {
+    return fallback;
+  }
+  return Math.round(Math.min(CPU_PACE_MAX_TARGET_MS, Math.max(CPU_PACE_MIN_TARGET_MS, average)));
+}
+
+export function formatPaceDuration(ms) {
+  if (ms == null || !Number.isFinite(ms)) {
+    return null;
+  }
+  if (ms < 1000) {
+    return `${Math.round(ms)}ms`;
+  }
+  if (ms < 10_000) {
+    return `${(ms / 1000).toFixed(1)}s`;
+  }
+  return `${Math.round(ms / 1000)}s`;
+}
+
+export function sleep(ms) {
+  const delay = Math.max(0, Number(ms) || 0);
+  if (delay <= 0) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, delay);
+  });
 }
 
 /**

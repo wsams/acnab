@@ -1002,6 +1002,19 @@ textarea {
   gap: 0.55rem;
 }
 
+.cpu-handicap-row {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.cpu-handicap-row .button {
+  justify-self: start;
+}
+
+.cpu-panel.is-pace-on #cpu-handicap[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
 .cpu-level-hint,
 .cpu-status,
 .coin-caption {
