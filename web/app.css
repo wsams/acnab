@@ -418,7 +418,78 @@ code {
   display: grid;
   gap: 1rem;
   grid-template-columns: minmax(0, 1.15fr) minmax(240px, 0.78fr) minmax(220px, 0.7fr);
+  grid-template-areas:
+    "board notation settings"
+    "meta notation settings";
   align-items: start;
+}
+
+/* Lets board + notation + meta participate in the app-shell grid on desktop. */
+.play-stage {
+  display: contents;
+}
+
+.panel-board {
+  grid-area: board;
+}
+
+.panel-board-meta {
+  grid-area: meta;
+}
+
+.panel-notation {
+  grid-area: notation;
+}
+
+.panel-settings {
+  grid-area: settings;
+}
+
+/* Desktop keeps opponent setup above the moves field even though the form is first in the DOM. */
+.panel-notation .panel-heading {
+  order: 0;
+}
+
+.panel-notation .cpu-panel {
+  order: 1;
+}
+
+.panel-notation .controls-stack {
+  order: 2;
+}
+
+.notation-dock-handle {
+  display: none;
+  order: -1;
+}
+
+.board-extras {
+  display: grid;
+  gap: 0.75rem;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+}
+
+.board-extras > summary {
+  list-style: none;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.board-extras > summary::-webkit-details-marker {
+  display: none;
+}
+
+@media (min-width: 801px) {
+  .board-extras > summary {
+    display: none;
+  }
 }
 
 .panel,
@@ -432,6 +503,7 @@ code {
 }
 
 .panel-board,
+.panel-board-meta,
 .panel-notation,
 .panel-settings {
   display: flex;
@@ -1179,49 +1251,148 @@ textarea {
 @media (max-width: 1100px) {
   .app-shell {
     grid-template-columns: minmax(0, 1.15fr) minmax(250px, 0.85fr);
-  }
-
-  .panel-settings {
-    grid-column: 1 / -1;
+    grid-template-areas:
+      "board notation"
+      "meta notation"
+      "settings settings";
   }
 }
 
 @media (max-width: 800px) {
   .app-shell {
     grid-template-columns: 1fr;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    padding-bottom: 0.35rem;
   }
 
+  .play-stage {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    order: 1;
+  }
+
+  /* One mobile play card: board on top, moves input immediately under it. */
   .panel-board {
     order: 1;
+    flex: 0 0 auto;
+    gap: 0.5rem;
+    padding: 0.7rem 0.7rem 0.45rem;
+    margin-bottom: 0;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    border-bottom-color: transparent;
+    box-shadow: none;
   }
 
   .panel-notation {
     order: 2;
+    position: static;
+    flex: 0 0 auto;
+    gap: 0.55rem;
+    margin: 0;
+    padding: 0.45rem 0.7rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+    max-height: none;
+    overflow: visible;
+    box-shadow: var(--shadow);
+  }
+
+  /* Moves field first; CPU / new-match below the input. */
+  .panel-notation .controls-stack {
+    order: 1;
+  }
+
+  .panel-notation .cpu-panel {
+    order: 2;
+  }
+
+  .notation-dock-handle {
+    display: none;
+  }
+
+  .panel-board-meta {
+    order: 3;
+    gap: 0.55rem;
+    padding: 0.7rem;
+    margin-top: 0.55rem;
   }
 
   .panel-settings {
-    order: 3;
-    grid-column: auto;
+    order: 2;
+    margin-top: 0.35rem;
   }
 
   .tagline {
     display: none;
   }
 
-  textarea {
-    min-height: 8.5rem;
+  .site-header {
+    padding-top: 0.55rem;
+    padding-bottom: 0.15rem;
+  }
+
+  .brand {
+    font-size: 1.35rem;
+  }
+
+  .panel-notation > .panel-heading {
+    display: none;
+  }
+
+  .panel-board .board-toolbar {
+    gap: 0.45rem;
+  }
+
+  .panel-board .status-card {
+    padding: 0.55rem 0.7rem;
+    font-size: 0.92rem;
+  }
+
+  .clock-controls,
+  .clock-hint {
+    display: none;
+  }
+
+  .clock-faces {
+    gap: 0.45rem;
+  }
+
+  .clock-face {
+    padding: 0.45rem 0.55rem;
+  }
+
+  .clock-time {
+    font-size: 1.15rem;
   }
 
   .board-layout {
-    grid-template-columns: 1fr;
-    gap: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  /* Captures above the board so input sits directly under the squares. */
+  .captures-black {
+    order: 1;
+  }
+
+  .captures-white {
+    order: 2;
+  }
+
+  .board-layout .board {
+    order: 3;
   }
 
   .captures {
     flex-direction: row;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.55rem;
+    gap: 0.45rem;
   }
 
   .captures-row {
@@ -1229,7 +1400,93 @@ textarea {
   }
 
   .board {
-    max-width: none;
+    width: min(100%, 72vw);
+    max-width: 22rem;
+    margin-inline: auto;
+  }
+
+  .board-extras {
+    border: 1px solid var(--border);
+    border-radius: 0.85rem;
+    padding: 0.35rem 0.7rem;
+  }
+
+  .board-extras > summary {
+    display: block;
+    padding: 0.35rem 0;
+  }
+
+  .board-extras[open] {
+    padding-bottom: 0.65rem;
+  }
+
+  .cpu-panel {
+    padding: 0.55rem 0.7rem;
+    gap: 0.45rem;
+  }
+
+  .cpu-title {
+    font-size: 0.92rem;
+  }
+
+  .coin-stage {
+    padding-top: 0.1rem;
+  }
+
+  .controls-stack {
+    gap: 0.55rem;
+  }
+
+  textarea {
+    min-height: 4.4rem;
+    max-height: 9rem;
+    font-size: 1rem;
+    padding: 0.65rem 0.75rem;
+  }
+
+  .panel-notation .actions {
+    gap: 0.4rem;
+  }
+
+  .panel-notation .feedback {
+    padding: 0.55rem 0.7rem;
+    font-size: 0.88rem;
+  }
+
+  /* While typing: keep board + input paired; hide the rest. */
+  body.is-editing-moves .site-header,
+  body.is-editing-moves .site-footer,
+  body.is-editing-moves .panel-settings,
+  body.is-editing-moves .panel-board-meta,
+  body.is-editing-moves .board-actions,
+  body.is-editing-moves .board-extras,
+  body.is-editing-moves .cpu-panel,
+  body.is-editing-moves .cpu-controls,
+  body.is-editing-moves .coin-stage {
+    display: none;
+  }
+
+  body.is-editing-moves .play-stage {
+    gap: 0;
+  }
+
+  body.is-editing-moves .panel-board {
+    padding: 0.55rem 0.55rem 0.35rem;
+    gap: 0.35rem;
+  }
+
+  body.is-editing-moves .board {
+    width: min(100%, 56vw);
+    max-width: 18rem;
+  }
+
+  body.is-editing-moves .panel-notation {
+    padding-top: 0.35rem;
+  }
+
+  body.is-editing-moves textarea {
+    min-height: 5.5rem;
+    max-height: 12rem;
   }
 }
 
@@ -1246,9 +1503,17 @@ textarea {
     padding: 0.85rem;
   }
 
+  .panel-board {
+    padding: 0.7rem 0.7rem 0.4rem;
+  }
+
+  .panel-notation {
+    padding-left: 0.7rem;
+    padding-right: 0.7rem;
+  }
+
   .board {
     grid-template-columns: auto repeat(8, minmax(1.7rem, 1fr));
-    max-width: none;
   }
 
   .board-actions {

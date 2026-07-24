@@ -964,6 +964,15 @@ function loadDemo() {
   elements.moves.focus();
 }
 
+function syncBoardExtrasDisclosure() {
+  const extras = document.querySelector('.board-extras');
+  if (!(extras instanceof HTMLDetailsElement)) {
+    return;
+  }
+  // Desktop: keep FEN/move list expanded. Mobile: collapse so board + input share the viewport.
+  extras.open = !window.matchMedia('(max-width: 800px)').matches;
+}
+
 function bindEvents() {
   elements.renderForm.addEventListener('submit', (event) => {
     event.preventDefault();
@@ -971,6 +980,12 @@ function bindEvents() {
   });
 
   elements.moves.addEventListener('input', queueLiveRender);
+  elements.moves.addEventListener('focus', () => {
+    document.body.classList.add('is-editing-moves');
+  });
+  elements.moves.addEventListener('blur', () => {
+    document.body.classList.remove('is-editing-moves');
+  });
   elements.themeSelect.addEventListener('change', (event) => applyTheme(event.target.value));
   elements.pieceSetSelect.addEventListener('change', (event) => applyPieceSet(event.target.value));
   elements.piecePaletteSelect.addEventListener('change', (event) => applyPiecePalette(event.target.value));
@@ -994,6 +1009,8 @@ function bindEvents() {
   });
   elements.cpuLevel?.addEventListener('change', (event) => applyCpuLevel(event.target.value));
   elements.cpuNewMatch?.addEventListener('click', () => startCpuMatch());
+
+  window.matchMedia('(max-width: 800px)').addEventListener('change', syncBoardExtrasDisclosure);
 
   document.querySelectorAll('[data-focus-moves]').forEach((node) => {
     node.addEventListener('click', (event) => {
@@ -1051,6 +1068,7 @@ function bootstrap() {
   elements.piecePaletteSelect.value = state.piecePalette;
   elements.moves.value = state.draft;
   syncFlipButton();
+  syncBoardExtrasDisclosure();
   paintClock();
   paintGame(state.game, { skipCpu: true });
   drawSavedGames();
