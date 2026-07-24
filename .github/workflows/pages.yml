@@ -1,23 +1,33 @@
-name: Deploy GitHub Pages
+name: Build GitHub Pages
+
+# GitHub Pages for this repo is configured as a legacy branch deploy from
+# `master` (root). That automatic `pages-build-deployment` publishes `web/`.
+# Do not also call actions/deploy-pages here — concurrent deployments race and
+# fail when semantic-release pushes a follow-up commit (see failed runs after
+# merges that trigger both Release and Pages).
+#
+# This workflow only verifies `scripts/build-pages.mjs` still produces `_site/`.
+# To publish exclusively from Actions later, switch Pages → "GitHub Actions"
+# and restore an actions/deploy-pages job.
 
 on:
   push:
     branches:
       - master
+  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: pages
+  group: pages-build-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
     name: Build
+    if: ${{ !contains(github.event.head_commit.message || '', '[skip ci]') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -31,19 +41,12 @@ jobs:
       - name: Build static site
         run: node scripts/build-pages.mjs
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: _site
-
-  deploy:
-    name: Deploy
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Verify site artifact
+        run: |
+          test -f _site/index.html
+          test -f _site/web/index.html
+          test -f _site/web/cpu.js
+          test -f _site/web/vendor/stockfish/stockfish-18-lite-single.wasm
+          test ! -f _site/web/index.php
+          test ! -f _site/web/chess.py
+          du -sh _site
