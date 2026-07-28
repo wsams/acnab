@@ -312,6 +312,7 @@ export function renderGame(movesText, { ply = null } = {}) {
     fen: chess.fen(),
     turn: chess.turn() === 'w' ? 'white' : 'black',
     isCheck: chess.isCheck(),
+    isCheckmate: chess.isCheckmate(),
     isGameOver,
     result,
     status: gameStatus(chess),
