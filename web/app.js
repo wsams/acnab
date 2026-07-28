@@ -1,4 +1,4 @@
-import { castlingRookMove, emptyGame, formatMovetext, moveNumberSignature, renderGame, sanFromUci } from './engine.js';
+import { castlingRookMove, emptyGame, enPassantCaptureSquare, formatMovetext, moveNumberSignature, renderGame, sanFromUci } from './engine.js';
 import {
   CLOCK_MODES,
   CLOCK_PRESETS,
@@ -766,7 +766,7 @@ function applyTheme(theme) {
   localStorage.setItem(STORAGE_KEYS.theme, nextTheme);
   if (state.piecePalette === 'theme') {
     applyPiecePaletteVars('theme');
-    renderBoard(state.game);
+    renderBoard(state.game, { settle: true });
   }
 }
 
@@ -777,7 +777,7 @@ function applyPieceSet(setId) {
   document.body.dataset.pieceSet = nextSet;
   elements.pieceSetSelect.value = nextSet;
   localStorage.setItem(STORAGE_KEYS.pieceSet, nextSet);
-  renderBoard(state.game);
+  renderBoard(state.game, { settle: true });
   renderCaptures(state.game);
 }
 
@@ -790,7 +790,7 @@ function applyPiecePalette(paletteId) {
   localStorage.setItem(STORAGE_KEYS.piecePalette, nextPalette);
   applyPiecePaletteVars(nextPalette);
   drawPaletteSwatches();
-  renderBoard(state.game);
+  renderBoard(state.game, { settle: true });
   renderCaptures(state.game);
   paintClock();
   paintCpuUi();
@@ -802,7 +802,7 @@ function setBoardFlipped(flipped) {
   state.animToken += 1;
   clearPieceFlyers();
   syncFlipButton();
-  renderBoard(state.game);
+  renderBoard(state.game, { settle: false });
   renderCaptures(state.game);
 }
 
@@ -827,11 +827,29 @@ function isViewingLive(fullGame = state.fullGame) {
 }
 
 function clearPieceFlyers() {
-  document.querySelectorAll('.piece-flyer').forEach((node) => node.remove());
+  document.querySelectorAll('.piece-flyer, .piece-victim').forEach((node) => node.remove());
+}
+
+function clearBoardEffects() {
+  elements.board?.querySelectorAll('.is-splash, .is-capture-burst, .is-check, .is-checkmate').forEach((node) => {
+    node.classList.remove('is-splash', 'is-capture-burst', 'is-check', 'is-checkmate');
+  });
+  elements.board?.classList.remove('is-mate-flash');
 }
 
 function squareNode(square) {
   return elements.board.querySelector(`[data-square="${square}"]`);
+}
+
+function findKingSquare(game, color) {
+  for (const row of game?.board ?? []) {
+    for (const square of row) {
+      if (square.piece?.type === 'k' && square.piece.color === color) {
+        return square.square;
+      }
+    }
+  }
+  return null;
 }
 
 function pieceSlotRect(squareEl) {
@@ -845,9 +863,10 @@ function pieceSlotRect(squareEl) {
   };
 }
 
-function createPieceFlyer(pieceEl, fromRect) {
+function createPieceFlyer(pieceEl, fromRect, className = 'piece-flyer') {
   const flyer = pieceEl.cloneNode(true);
-  flyer.classList.add('piece-flyer');
+  flyer.classList.add(className);
+  flyer.classList.remove('is-hidden-for-anim');
   flyer.removeAttribute('aria-hidden');
   flyer.style.left = `${fromRect.left}px`;
   flyer.style.top = `${fromRect.top}px`;
@@ -874,7 +893,27 @@ function animateFlyerTo(flyer, fromRect, toRect, durationMs) {
   return animation.finished.catch(() => {});
 }
 
-function playLandingSplash(square) {
+function animateCaptureVictim(victimEl, durationMs) {
+  const animation = victimEl.animate(
+    [
+      { transform: 'translate(0, 0) scale(1) rotate(0deg)', opacity: 1, offset: 0 },
+      { transform: 'translate(0, -8%) scale(1.12) rotate(-8deg)', opacity: 1, offset: 0.18 },
+      {
+        transform: 'translate(18%, -42%) scale(0.15) rotate(42deg)',
+        opacity: 0,
+        offset: 1,
+      },
+    ],
+    {
+      duration: Math.max(280, Math.floor(durationMs * 0.72)),
+      easing: 'cubic-bezier(0.2, 0.75, 0.25, 1)',
+      fill: 'forwards',
+    },
+  );
+  return animation.finished.catch(() => {}).finally(() => victimEl.remove());
+}
+
+function pulseSquareClass(square, className, durationMs) {
   if (!square || prefersReducedMotion()) {
     return;
   }
@@ -882,15 +921,58 @@ function playLandingSplash(square) {
   if (!target) {
     return;
   }
-  target.classList.remove('is-splash');
+  target.classList.remove(className);
   void target.offsetWidth;
-  target.classList.add('is-splash');
+  target.classList.add(className);
   window.setTimeout(() => {
-    target.classList.remove('is-splash');
-  }, 480);
+    target.classList.remove(className);
+  }, durationMs);
 }
 
-function renderBoard(game, { hidePieces = null, animating = false } = {}) {
+function playLandingSplash(square) {
+  pulseSquareClass(square, 'is-splash', 520);
+}
+
+function playCaptureBurst(square) {
+  pulseSquareClass(square, 'is-capture-burst', 620);
+}
+
+function playCheckEffects(game, move) {
+  if (!game?.isCheck && !game?.isCheckmate) {
+    return;
+  }
+  const checkedSide = game.turn;
+  const kingSquare = findKingSquare(game, checkedSide);
+  if (!kingSquare) {
+    return;
+  }
+
+  if (game.isCheckmate) {
+    pulseSquareClass(kingSquare, 'is-checkmate', 1400);
+    if (!prefersReducedMotion()) {
+      elements.board.classList.remove('is-mate-flash');
+      void elements.board.offsetWidth;
+      elements.board.classList.add('is-mate-flash');
+      window.setTimeout(() => {
+        elements.board.classList.remove('is-mate-flash');
+      }, 1200);
+    }
+    return;
+  }
+
+  pulseSquareClass(kingSquare, 'is-check', 900);
+}
+
+function revealAnimatedPieces(squares) {
+  squares.forEach((square) => {
+    const piece = squareNode(square)?.querySelector('.piece');
+    if (piece) {
+      piece.classList.remove('is-hidden-for-anim');
+    }
+  });
+}
+
+function renderBoard(game, { hidePieces = null, animating = false, settle = false } = {}) {
   const hidden = hidePieces instanceof Set ? hidePieces : new Set(hidePieces ?? []);
   const squares = [];
   const files = state.flipped
@@ -900,6 +982,7 @@ function renderBoard(game, { hidePieces = null, animating = false } = {}) {
     ? game.board.map((row) => [...row].reverse()).reverse()
     : game.board;
 
+  clearBoardEffects();
   squares.push('<div class="legend board-cell"></div>');
   files.forEach((file) => squares.push(`<div class="legend board-cell">${file}</div>`));
 
@@ -930,20 +1013,24 @@ function renderBoard(game, { hidePieces = null, animating = false } = {}) {
   });
 
   elements.board.classList.toggle('is-animating', animating);
+  elements.board.classList.remove('is-settling');
   elements.board.innerHTML = squares.join('');
   elements.board.classList.remove('is-updating');
-  if (!animating) {
+  elements.board.classList.add('is-ready');
+  if (settle && !animating && !prefersReducedMotion()) {
     void elements.board.offsetWidth;
-    elements.board.classList.add('is-ready');
-  } else {
-    elements.board.classList.add('is-ready');
+    elements.board.classList.add('is-settling');
   }
 }
 
 async function animateBoardMove(move, nextGame) {
   if (!move || prefersReducedMotion()) {
-    renderBoard(nextGame);
+    renderBoard(nextGame, { settle: false });
     playLandingSplash(move?.to);
+    if (move?.isCapture || move?.isEnPassant) {
+      playCaptureBurst(move.to);
+    }
+    playCheckEffects(nextGame, move);
     return;
   }
 
@@ -951,19 +1038,36 @@ async function animateBoardMove(move, nextGame) {
   const toSquare = squareNode(move.to);
   const movingPiece = fromSquare?.querySelector('.piece');
   if (!fromSquare || !toSquare || !movingPiece) {
-    renderBoard(nextGame);
+    renderBoard(nextGame, { settle: false });
     playLandingSplash(move?.to);
+    playCheckEffects(nextGame, move);
     return;
   }
 
   const token = state.animToken + 1;
   state.animToken = token;
   clearPieceFlyers();
+  clearBoardEffects();
 
   const fromRect = pieceSlotRect(fromSquare);
   const toRect = pieceSlotRect(toSquare);
   const flyer = createPieceFlyer(movingPiece, fromRect);
   movingPiece.classList.add('is-hidden-for-anim');
+
+  const captureSquare = move.isEnPassant ? enPassantCaptureSquare(move) : (move.isCapture ? move.to : null);
+  let victimPromise = Promise.resolve();
+  let capturedPiece = null;
+  let captureEl = null;
+  if (captureSquare) {
+    captureEl = squareNode(captureSquare);
+    capturedPiece = captureEl?.querySelector('.piece');
+    if (capturedPiece) {
+      const victimRect = pieceSlotRect(captureEl);
+      const victim = createPieceFlyer(capturedPiece, victimRect, 'piece-victim');
+      capturedPiece.classList.add('is-hidden-for-anim');
+      victimPromise = animateCaptureVictim(victim, SLIDE_DURATION_MS);
+    }
+  }
 
   const rookMove = castlingRookMove(move);
   let rookFlyer = null;
@@ -985,12 +1089,22 @@ async function animateBoardMove(move, nextGame) {
   if (rookMove) {
     hidePieces.add(rookMove.to);
   }
-  renderBoard(nextGame, { hidePieces, animating: true });
+  // Single rebuild during the slide; destination pieces stay hidden until landing.
+  renderBoard(nextGame, { hidePieces, animating: true, settle: false });
 
-  // Re-measure destination after layout in case the board shifted.
+  if (move.isCapture || move.isEnPassant) {
+    playCaptureBurst(move.to);
+    if (captureSquare && captureSquare !== move.to) {
+      playCaptureBurst(captureSquare);
+    }
+  }
+
   const nextTo = squareNode(move.to);
   const finalToRect = nextTo ? pieceSlotRect(nextTo) : toRect;
-  const animations = [animateFlyerTo(flyer, fromRect, finalToRect, SLIDE_DURATION_MS)];
+  const animations = [
+    animateFlyerTo(flyer, fromRect, finalToRect, SLIDE_DURATION_MS),
+    victimPromise,
+  ];
   if (rookFlyer && rookFromRect && rookMove) {
     const nextRookTo = squareNode(rookMove.to);
     const finalRookRect = nextRookTo ? pieceSlotRect(nextRookTo) : rookToRect;
@@ -1005,8 +1119,15 @@ async function animateBoardMove(move, nextGame) {
     return;
   }
 
-  renderBoard(nextGame, { animating: false });
+  // Reveal landed pieces in place — do not rebuild the board (avoids settle jitter).
+  revealAnimatedPieces(hidePieces);
+  elements.board.classList.remove('is-animating');
+  squareNode(move.to)?.classList.remove('is-capture-burst');
+  if (captureSquare && captureSquare !== move.to) {
+    squareNode(captureSquare)?.classList.remove('is-capture-burst');
+  }
   playLandingSplash(move.to);
+  playCheckEffects(nextGame, move);
 }
 
 function stopReplayPlayback({ finished = false } = {}) {
@@ -1102,7 +1223,7 @@ async function paintGame(game, {
   } else {
     state.animToken += 1;
     clearPieceFlyers();
-    renderBoard(game);
+    renderBoard(game, { settle: false });
   }
 
   renderCaptures(game);
