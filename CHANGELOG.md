@@ -1,3 +1,10 @@
+## [1.4.1](https://github.com/wsams/acnab/compare/v1.4.0...v1.4.1) (2026-07-28)
+
+
+### Bug Fixes
+
+* Stop Actions Pages deploy racing legacy branch publish ([533a4a2](https://github.com/wsams/acnab/commit/533a4a268ab47f22c9031d341c5d91862ae5ca81))
+
 # [1.4.0](https://github.com/wsams/acnab/compare/v1.3.0...v1.4.0) (2026-07-28)
 
 
