@@ -89,12 +89,63 @@ const MATERIAL = {
 
 const CAPTURE_ORDER = ['q', 'r', 'b', 'n', 'p'];
 
-function applyMoves(movesText) {
+function summarizeMove(move) {
+  return {
+    san: move.san,
+    from: move.from,
+    to: move.to,
+    color: move.color === 'w' ? 'white' : 'black',
+    piece: move.piece,
+    captured: move.captured || null,
+    promotion: move.promotion || null,
+    flags: move.flags || '',
+    isCapture: typeof move.isCapture === 'function' ? move.isCapture() : Boolean(move.captured),
+    isEnPassant: typeof move.isEnPassant === 'function'
+      ? move.isEnPassant()
+      : String(move.flags || '').includes('e'),
+    isKingsideCastle: typeof move.isKingsideCastle === 'function'
+      ? move.isKingsideCastle()
+      : String(move.flags || '').includes('k'),
+    isQueensideCastle: typeof move.isQueensideCastle === 'function'
+      ? move.isQueensideCastle()
+      : String(move.flags || '').includes('q'),
+  };
+}
+
+/** Secondary rook slide for castling animations. */
+export function castlingRookMove(move) {
+  if (!move) {
+    return null;
+  }
+  if (move.isKingsideCastle) {
+    const rank = move.color === 'white' ? '1' : '8';
+    return { from: `h${rank}`, to: `f${rank}` };
+  }
+  if (move.isQueensideCastle) {
+    const rank = move.color === 'white' ? '1' : '8';
+    return { from: `a${rank}`, to: `d${rank}` };
+  }
+  return null;
+}
+
+/** Square of a pawn captured en passant (the vacated file/rank). */
+export function enPassantCaptureSquare(move) {
+  if (!move?.isEnPassant) {
+    return null;
+  }
+  return `${move.to[0]}${move.from[1]}`;
+}
+
+function applyMoves(movesText, { maxPly = null } = {}) {
   const chess = new Chess();
   const appliedSan = [];
   const captures = { white: [], black: [] };
+  const history = [];
+  const tokens = tokenizeMovetext(movesText);
+  const limit = maxPly == null ? tokens.length : Math.max(0, Math.min(maxPly, tokens.length));
 
-  tokenizeMovetext(movesText).forEach((token, index) => {
+  for (let index = 0; index < limit; index += 1) {
+    const token = tokens[index];
     let move = null;
     let sanError = null;
     try {
@@ -116,14 +167,16 @@ function applyMoves(movesText) {
       }
     }
 
-    appliedSan.push(move.san);
-    if (move.captured) {
-      const taker = move.color === 'w' ? 'white' : 'black';
-      captures[taker].push(move.captured);
+    const summary = summarizeMove(move);
+    appliedSan.push(summary.san);
+    history.push(summary);
+    if (summary.captured) {
+      const taker = summary.color;
+      captures[taker].push(summary.captured);
     }
-  });
+  }
 
-  return { chess, appliedSan, captures };
+  return { chess, appliedSan, captures, history, tokenCount: tokens.length };
 }
 
 function sortCaptures(types) {
@@ -236,9 +289,9 @@ export function moveNumberSignature(movesText) {
     .join('|');
 }
 
-export function renderGame(movesText) {
+export function renderGame(movesText, { ply = null } = {}) {
   const input = String(movesText ?? '');
-  const { chess, appliedSan, captures } = applyMoves(input);
+  const { chess, appliedSan, captures, history, tokenCount } = applyMoves(input, { maxPly: ply });
   const isGameOver = chess.isGameOver();
   let result = null;
   if (isGameOver) {
@@ -253,6 +306,8 @@ export function renderGame(movesText) {
     input,
     normalizedInput: normalizeMovetext(input),
     appliedMoves: appliedSan,
+    history,
+    totalMoves: tokenCount,
     moveCount: appliedSan.length,
     fen: chess.fen(),
     turn: chess.turn() === 'w' ? 'white' : 'black',

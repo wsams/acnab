@@ -56,6 +56,8 @@ GitHub Pages publishes the static UI from `web/` (the site root redirects there)
 - localStorage drafts and named saves
 - theme, SVG piece-set, and piece-color switching plus FEN/status summaries
 - flip board for couch co-op
+- shareable board links (notation encoded in the URL hash)
+- play controls to step through or autoplay a game with sliding piece animation
 - optional CPU opponent (Stockfish.js 18 WASM, skill/Elo presets) — off by default; coin toss for who plays White
 - no CDN runtime dependency for the chess engine (Stockfish is vendored under `web/vendor/stockfish/`, GPLv3)
 

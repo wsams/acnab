@@ -91,6 +91,25 @@
 
       <div class="scoreboard" id="scoreboard" aria-live="polite"></div>
 
+      <div class="replay-panel" id="replay-panel">
+        <div class="replay-controls" role="group" aria-label="Game play controls">
+          <button id="replay-first" type="button" class="button ghost" title="Go to start">First</button>
+          <button id="replay-prev" type="button" class="button ghost" title="Previous move">Prev</button>
+          <button id="replay-play" type="button" class="button primary" aria-pressed="false" title="Play or pause">Play</button>
+          <button id="replay-next" type="button" class="button ghost" title="Next move">Next</button>
+          <button id="replay-last" type="button" class="button ghost" title="Go to end">Last</button>
+        </div>
+        <label class="field compact-field replay-speed-field">
+          <span>Speed</span>
+          <select id="replay-speed" aria-label="Playback speed">
+            <option value="1400">Slow</option>
+            <option value="950" selected>Normal</option>
+            <option value="600">Fast</option>
+          </select>
+        </label>
+        <p id="replay-position" class="replay-position" aria-live="polite">0 / 0</p>
+      </div>
+
       <div class="board-summary">
         <div>
           <span class="summary-label">FEN</span>
@@ -157,6 +176,7 @@
         <div class="actions">
           <button type="submit" class="button primary">Render</button>
           <button type="button" id="copy-pgn" class="button ghost">Copy</button>
+          <button type="button" id="share-link" class="button ghost" title="Copy a link to this board position">Share</button>
           <button type="button" id="load-demo" class="button ghost">Demo</button>
         </div>
         <div id="feedback" class="feedback" role="status" aria-live="polite"></div>
@@ -225,6 +245,8 @@
           <li><strong>Notation pause</strong> clock: typing pauses the timer; typing a move number (<code>1.</code>, <code>2.</code>, <code>1...</code>) presses the clock for the side to move. Edit freely until then.</li>
           <li><strong>Live</strong> clock: follows each completed move and keeps running while you type.</li>
           <li>Flip the board for couch co-op without turning the device.</li>
+          <li><strong>Share</strong> copies a link with the current notation encoded in the URL hash so others open the same board state.</li>
+          <li><strong>Play controls</strong> under the board step through or autoplay the game; pieces slide into place (also during live notation updates).</li>
           <li><strong>CPU player</strong> (off by default): toss a coin for White, then enter your moves in notation — Stockfish replies automatically. Strength uses Stockfish skill / Elo limits from beginner through full engine.</li>
         </ul>
       </details>

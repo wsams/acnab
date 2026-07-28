@@ -1,4 +1,4 @@
-import { emptyGame, formatMovetext, moveNumberSignature, renderGame, sanFromUci } from './engine.js';
+import { castlingRookMove, emptyGame, formatMovetext, moveNumberSignature, renderGame, sanFromUci } from './engine.js';
 import {
   CLOCK_MODES,
   CLOCK_PRESETS,
@@ -21,6 +21,12 @@ import {
   resolvePiecePalette,
   resolvePieceSet,
 } from './pieces.js';
+import {
+  buildShareUrl,
+  decodeMovetext,
+  parseShareHash,
+  writeShareHash,
+} from './share.js';
 
 const STORAGE_KEYS = {
   draft: 'acnab:draft',
@@ -32,9 +38,18 @@ const STORAGE_KEYS = {
   clockPreset: 'acnab:clock-preset',
   clockMode: 'acnab:clock-mode',
   cpuLevel: 'acnab:cpu-level',
+  replaySpeed: 'acnab:replay-speed',
 };
 
 const DEMO_MOVES = '1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7';
+
+const SLIDE_DURATION_MS = 620;
+const REPLAY_SPEEDS = new Set(['1400', '950', '600']);
+
+function resolveReplaySpeed(value) {
+  const next = String(value ?? '');
+  return REPLAY_SPEEDS.has(next) ? Number(next) : 950;
+}
 
 const THEMES = {
   walnut: { label: 'Walnut', scheme: 'dark' },
@@ -68,6 +83,7 @@ function resolveClockMode(mode) {
 
 const state = {
   game: emptyGame(),
+  fullGame: emptyGame(),
   draft: localStorage.getItem(STORAGE_KEYS.draft) ?? '',
   theme: resolveTheme(localStorage.getItem(STORAGE_KEYS.theme)),
   pieceSet: resolvePieceSet(localStorage.getItem(STORAGE_KEYS.pieceSet)),
@@ -78,6 +94,15 @@ const state = {
   clockMoveSig: '',
   requestTimer: null,
   typingResumeTimer: null,
+  shareTimer: null,
+  animToken: 0,
+  replay: {
+    ply: null,
+    playing: false,
+    timer: null,
+    generation: 0,
+    speedMs: resolveReplaySpeed(localStorage.getItem(STORAGE_KEYS.replaySpeed)),
+  },
   cpu: {
     enabled: false,
     levelId: resolveCpuLevel(localStorage.getItem(STORAGE_KEYS.cpuLevel)),
@@ -123,8 +148,16 @@ const elements = {
   newGame: document.querySelector('#new-game'),
   flipBoard: document.querySelector('#flip-board'),
   copyPgn: document.querySelector('#copy-pgn'),
+  shareLink: document.querySelector('#share-link'),
   saveGame: document.querySelector('#save-game'),
   loadDemo: document.querySelector('#load-demo'),
+  replayFirst: document.querySelector('#replay-first'),
+  replayPrev: document.querySelector('#replay-prev'),
+  replayPlay: document.querySelector('#replay-play'),
+  replayNext: document.querySelector('#replay-next'),
+  replayLast: document.querySelector('#replay-last'),
+  replaySpeed: document.querySelector('#replay-speed'),
+  replayPosition: document.querySelector('#replay-position'),
   cpuPanel: document.querySelector('#cpu-panel'),
   cpuToggle: document.querySelector('#cpu-toggle'),
   cpuControls: document.querySelector('#cpu-controls'),
@@ -765,6 +798,8 @@ function applyPiecePalette(paletteId) {
 function setBoardFlipped(flipped) {
   state.flipped = Boolean(flipped);
   localStorage.setItem(STORAGE_KEYS.flipped, state.flipped ? '1' : '0');
+  state.animToken += 1;
+  clearPieceFlyers();
   syncFlipButton();
   renderBoard(state.game);
   renderCaptures(state.game);
@@ -775,7 +810,87 @@ function setFeedback(message, isError = false) {
   elements.feedback.classList.toggle('is-error', isError);
 }
 
-function renderBoard(game) {
+function prefersReducedMotion() {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+function currentViewPly(fullGame = state.fullGame) {
+  if (state.replay.ply == null) {
+    return fullGame?.moveCount ?? 0;
+  }
+  return Math.max(0, Math.min(state.replay.ply, fullGame?.moveCount ?? 0));
+}
+
+function isViewingLive(fullGame = state.fullGame) {
+  return state.replay.ply == null || currentViewPly(fullGame) >= (fullGame?.moveCount ?? 0);
+}
+
+function clearPieceFlyers() {
+  document.querySelectorAll('.piece-flyer').forEach((node) => node.remove());
+}
+
+function squareNode(square) {
+  return elements.board.querySelector(`[data-square="${square}"]`);
+}
+
+function pieceSlotRect(squareEl) {
+  const rect = squareEl.getBoundingClientRect();
+  const size = Math.min(rect.width, rect.height) * 0.84;
+  return {
+    left: rect.left + ((rect.width - size) / 2),
+    top: rect.top + ((rect.height - size) / 2),
+    width: size,
+    height: size,
+  };
+}
+
+function createPieceFlyer(pieceEl, fromRect) {
+  const flyer = pieceEl.cloneNode(true);
+  flyer.classList.add('piece-flyer');
+  flyer.removeAttribute('aria-hidden');
+  flyer.style.left = `${fromRect.left}px`;
+  flyer.style.top = `${fromRect.top}px`;
+  flyer.style.width = `${fromRect.width}px`;
+  flyer.style.height = `${fromRect.height}px`;
+  document.body.appendChild(flyer);
+  return flyer;
+}
+
+function animateFlyerTo(flyer, fromRect, toRect, durationMs) {
+  const dx = toRect.left - fromRect.left;
+  const dy = toRect.top - fromRect.top;
+  const animation = flyer.animate(
+    [
+      { transform: 'translate(0px, 0px)' },
+      { transform: `translate(${dx}px, ${dy}px)` },
+    ],
+    {
+      duration: durationMs,
+      easing: 'cubic-bezier(0.22, 0.61, 0.36, 1)',
+      fill: 'forwards',
+    },
+  );
+  return animation.finished.catch(() => {});
+}
+
+function playLandingSplash(square) {
+  if (!square || prefersReducedMotion()) {
+    return;
+  }
+  const target = squareNode(square);
+  if (!target) {
+    return;
+  }
+  target.classList.remove('is-splash');
+  void target.offsetWidth;
+  target.classList.add('is-splash');
+  window.setTimeout(() => {
+    target.classList.remove('is-splash');
+  }, 480);
+}
+
+function renderBoard(game, { hidePieces = null, animating = false } = {}) {
+  const hidden = hidePieces instanceof Set ? hidePieces : new Set(hidePieces ?? []);
   const squares = [];
   const files = state.flipped
     ? ['H', 'G', 'F', 'E', 'D', 'C', 'B', 'A']
@@ -792,15 +907,20 @@ function renderBoard(game) {
     squares.push(`<div class="legend board-cell">${rankLabel}</div>`);
     row.forEach((square) => {
       const piece = square.piece;
+      const hidePiece = Boolean(piece) && hidden.has(square.square);
       const pieceMarkup = piece
-        ? `<span class="piece ${piece.color}" aria-hidden="true">${renderPieceSvg(piece.type, piece.color, state.pieceSet, state.piecePalette)}</span>`
+        ? `<span class="piece ${piece.color}${hidePiece ? ' is-hidden-for-anim' : ''}" aria-hidden="true">${renderPieceSvg(piece.type, piece.color, state.pieceSet, state.piecePalette)}</span>`
         : '';
       const label = piece
         ? `${piece.color} ${piece.name} on ${square.square}`
         : `empty ${square.square}`;
       const pieceClass = piece ? ` has-piece ${piece.color}` : '';
       squares.push(`
-        <div class="board-square board-cell ${square.isLight ? 'light' : 'dark'}${pieceClass}" aria-label="${escapeHtml(label)}">
+        <div
+          class="board-square board-cell ${square.isLight ? 'light' : 'dark'}${pieceClass}"
+          data-square="${escapeHtml(square.square)}"
+          aria-label="${escapeHtml(label)}"
+        >
           ${pieceMarkup}
           <span class="coordinate">${escapeHtml(square.square)}</span>
         </div>
@@ -808,28 +928,150 @@ function renderBoard(game) {
     });
   });
 
+  elements.board.classList.toggle('is-animating', animating);
   elements.board.innerHTML = squares.join('');
   elements.board.classList.remove('is-updating');
-  void elements.board.offsetWidth;
-  elements.board.classList.add('is-ready');
+  if (!animating) {
+    void elements.board.offsetWidth;
+    elements.board.classList.add('is-ready');
+  } else {
+    elements.board.classList.add('is-ready');
+  }
 }
 
-function renderMoves(game) {
-  if (!game.appliedMoves.length) {
+async function animateBoardMove(move, nextGame) {
+  if (!move || prefersReducedMotion()) {
+    renderBoard(nextGame);
+    playLandingSplash(move?.to);
+    return;
+  }
+
+  const fromSquare = squareNode(move.from);
+  const toSquare = squareNode(move.to);
+  const movingPiece = fromSquare?.querySelector('.piece');
+  if (!fromSquare || !toSquare || !movingPiece) {
+    renderBoard(nextGame);
+    playLandingSplash(move?.to);
+    return;
+  }
+
+  const token = state.animToken + 1;
+  state.animToken = token;
+  clearPieceFlyers();
+
+  const fromRect = pieceSlotRect(fromSquare);
+  const toRect = pieceSlotRect(toSquare);
+  const flyer = createPieceFlyer(movingPiece, fromRect);
+  movingPiece.classList.add('is-hidden-for-anim');
+
+  const rookMove = castlingRookMove(move);
+  let rookFlyer = null;
+  let rookFromRect = null;
+  let rookToRect = null;
+  if (rookMove) {
+    const rookFrom = squareNode(rookMove.from);
+    const rookTo = squareNode(rookMove.to);
+    const rookPiece = rookFrom?.querySelector('.piece');
+    if (rookFrom && rookTo && rookPiece) {
+      rookFromRect = pieceSlotRect(rookFrom);
+      rookToRect = pieceSlotRect(rookTo);
+      rookFlyer = createPieceFlyer(rookPiece, rookFromRect);
+      rookPiece.classList.add('is-hidden-for-anim');
+    }
+  }
+
+  const hidePieces = new Set([move.to]);
+  if (rookMove) {
+    hidePieces.add(rookMove.to);
+  }
+  renderBoard(nextGame, { hidePieces, animating: true });
+
+  // Re-measure destination after layout in case the board shifted.
+  const nextTo = squareNode(move.to);
+  const finalToRect = nextTo ? pieceSlotRect(nextTo) : toRect;
+  const animations = [animateFlyerTo(flyer, fromRect, finalToRect, SLIDE_DURATION_MS)];
+  if (rookFlyer && rookFromRect && rookMove) {
+    const nextRookTo = squareNode(rookMove.to);
+    const finalRookRect = nextRookTo ? pieceSlotRect(nextRookTo) : rookToRect;
+    animations.push(animateFlyerTo(rookFlyer, rookFromRect, finalRookRect, SLIDE_DURATION_MS));
+  }
+
+  await Promise.all(animations);
+  flyer.remove();
+  rookFlyer?.remove();
+
+  if (token !== state.animToken) {
+    return;
+  }
+
+  renderBoard(nextGame, { animating: false });
+  playLandingSplash(move.to);
+}
+
+function stopReplayPlayback() {
+  state.replay.playing = false;
+  state.replay.generation += 1;
+  if (state.replay.timer != null) {
+    window.clearTimeout(state.replay.timer);
+    state.replay.timer = null;
+  }
+  paintReplayUi();
+}
+
+function paintReplayUi() {
+  const full = state.fullGame;
+  const ply = currentViewPly(full);
+  const total = full?.moveCount ?? 0;
+  if (elements.replayPosition) {
+    elements.replayPosition.textContent = `${ply} / ${total}`;
+  }
+  if (elements.replayPlay) {
+    elements.replayPlay.textContent = state.replay.playing ? 'Pause' : 'Play';
+    elements.replayPlay.setAttribute('aria-pressed', state.replay.playing ? 'true' : 'false');
+  }
+  const atStart = ply <= 0;
+  const atEnd = ply >= total;
+  if (elements.replayFirst) elements.replayFirst.disabled = atStart;
+  if (elements.replayPrev) elements.replayPrev.disabled = atStart;
+  if (elements.replayNext) elements.replayNext.disabled = atEnd;
+  if (elements.replayLast) elements.replayLast.disabled = atEnd;
+  if (elements.replayPlay) elements.replayPlay.disabled = total === 0 && !state.replay.playing;
+  if (elements.replaySpeed) elements.replaySpeed.value = String(state.replay.speedMs);
+  elements.board?.classList.toggle('is-reviewing', !isViewingLive(full));
+}
+
+function queueShareHash(moves) {
+  clearTimeout(state.shareTimer);
+  state.shareTimer = window.setTimeout(() => {
+    try {
+      writeShareHash(moves);
+    } catch {
+      // Ignore history API failures in locked-down contexts.
+    }
+  }, 200);
+}
+
+function renderMoves(game, fullGame = state.fullGame) {
+  const moves = fullGame?.appliedMoves?.length ? fullGame.appliedMoves : game.appliedMoves;
+  const viewPly = currentViewPly(fullGame);
+
+  if (!moves.length) {
     elements.movesList.innerHTML = '<li>Start position</li>';
     return;
   }
 
   const entries = [];
-  for (let index = 0; index < game.appliedMoves.length; index += 2) {
+  for (let index = 0; index < moves.length; index += 2) {
     const turn = Math.floor(index / 2) + 1;
-    const white = game.appliedMoves[index];
-    const black = game.appliedMoves[index + 1];
-    entries.push(
-      black
-        ? `<li>${turn}. ${escapeHtml(white)} ${escapeHtml(black)}</li>`
-        : `<li>${turn}. ${escapeHtml(white)}</li>`,
-    );
+    const white = moves[index];
+    const black = moves[index + 1];
+    const whiteActive = viewPly === index + 1 ? ' is-active-ply' : '';
+    const blackActive = viewPly === index + 2 ? ' is-active-ply' : '';
+    const whiteBtn = `<button type="button" class="ply-jump${whiteActive}" data-ply="${index + 1}">${escapeHtml(white)}</button>`;
+    const blackBtn = black
+      ? ` <button type="button" class="ply-jump${blackActive}" data-ply="${index + 2}">${escapeHtml(black)}</button>`
+      : '';
+    entries.push(`<li><span class="ply-turn">${turn}.</span> ${whiteBtn}${blackBtn}</li>`);
   }
   elements.movesList.innerHTML = entries.join('');
 }
@@ -837,44 +1079,255 @@ function renderMoves(game) {
 function renderStatus(game) {
   elements.status.textContent = game.status;
   elements.fen.textContent = game.fen;
-  elements.moveCount.textContent = String(game.moveCount);
+  elements.moveCount.textContent = String(state.fullGame?.moveCount ?? game.moveCount);
 }
 
-function paintGame(game, { skipCpu = false } = {}) {
-  const previousMoveCount = state.game?.moveCount ?? 0;
+async function paintGame(game, {
+  skipCpu = false,
+  animateMove = null,
+  syncClock = true,
+  previousMoveCount = null,
+} = {}) {
+  const priorCount = previousMoveCount ?? state.game?.moveCount ?? 0;
   state.game = game;
-  renderBoard(game);
+
+  if (animateMove) {
+    await animateBoardMove(animateMove, game);
+  } else {
+    state.animToken += 1;
+    clearPieceFlyers();
+    renderBoard(game);
+  }
+
   renderCaptures(game);
-  renderMoves(game);
+  renderMoves(game, state.fullGame);
   renderStatus(game);
-  syncClockFromNotation(elements.moves.value, game, { previousMoveCount });
-  if (!skipCpu) {
-    maybeRequestCpuMove(game);
+  paintReplayUi();
+
+  if (syncClock && isViewingLive()) {
+    syncClockFromNotation(elements.moves.value, state.fullGame, { previousMoveCount: priorCount });
+  }
+
+  if (!skipCpu && isViewingLive()) {
+    maybeRequestCpuMove(state.fullGame);
   } else {
     paintCpuUi();
   }
 }
 
-function updateBoard(moves, announce = true, { skipCpu = false } = {}) {
+function gameForPly(movesText, ply) {
+  if (ply == null) {
+    return renderGame(movesText);
+  }
+  return renderGame(movesText, { ply });
+}
+
+async function updateBoard(moves, announce = true, {
+  skipCpu = false,
+  fromReplay = false,
+  animateMove = null,
+  replayGeneration = null,
+} = {}) {
   state.draft = moves;
   localStorage.setItem(STORAGE_KEYS.draft, moves);
 
   try {
-    const game = renderGame(moves);
-    paintGame(game, { skipCpu });
+    const fullGame = renderGame(moves);
+    if (fromReplay && replayGeneration != null && replayGeneration !== state.replay.generation) {
+      return;
+    }
+    const previousFullCount = state.fullGame?.moveCount ?? 0;
+    const previousViewPly = currentViewPly(state.fullGame);
+    state.fullGame = fullGame;
+
+    if (!fromReplay) {
+      state.replay.ply = null;
+      stopReplayPlayback();
+    } else if (state.replay.ply != null) {
+      state.replay.ply = Math.min(state.replay.ply, fullGame.moveCount);
+      if (state.replay.ply >= fullGame.moveCount) {
+        state.replay.ply = null;
+      }
+    }
+
+    const viewPly = currentViewPly(fullGame);
+    const displayGame = gameForPly(moves, state.replay.ply == null ? null : viewPly);
+
+    let moveToAnimate = animateMove;
+
+    // Detect a single forward ply for live notation / CPU replies.
+    if (!moveToAnimate && !fromReplay) {
+      const prevSans = state.game?.appliedMoves ?? [];
+      if (
+        isViewingLive(fullGame)
+        && fullGame.moveCount === prevSans.length + 1
+        && fullGame.appliedMoves.slice(0, -1).every((san, index) => san === prevSans[index])
+      ) {
+        moveToAnimate = fullGame.history[fullGame.history.length - 1] ?? null;
+      }
+    }
+
+    if (!moveToAnimate && fromReplay && viewPly === previousViewPly + 1) {
+      moveToAnimate = fullGame.history[previousViewPly] ?? null;
+    }
+
+    if (fromReplay && replayGeneration != null && replayGeneration !== state.replay.generation) {
+      return;
+    }
+
+    await paintGame(displayGame, {
+      skipCpu,
+      animateMove: moveToAnimate,
+      syncClock: !fromReplay || isViewingLive(fullGame),
+      previousMoveCount: previousFullCount,
+    });
+    queueShareHash(fullGame.normalizedInput || moves);
+
     if (announce) {
       setFeedback('Board updated.');
-    } else if (!state.cpu.enabled) {
+    } else if (!state.cpu.enabled && !fromReplay) {
       elements.feedback.textContent = '';
       elements.feedback.classList.remove('is-error');
     }
   } catch (error) {
-    // Keep last good position; still handle notation clock presses from raw text.
     if (state.cpu.enabled) {
       cancelCpuSearch();
     }
-    syncClockFromNotation(moves, state.game);
+    syncClockFromNotation(moves, state.fullGame);
     setFeedback(error.message, true);
+  }
+}
+
+async function seekReplay(ply, { animate = true } = {}) {
+  stopReplayPlayback();
+  let fullGame;
+  try {
+    fullGame = renderGame(elements.moves.value);
+  } catch (error) {
+    setFeedback(error.message, true);
+    return;
+  }
+
+  state.fullGame = fullGame;
+  const target = Math.max(0, Math.min(ply, fullGame.moveCount));
+  const previousPly = currentViewPly(fullGame);
+  state.replay.ply = target >= fullGame.moveCount ? null : target;
+
+  const moveToAnimate = animate && target === previousPly + 1
+    ? fullGame.history[previousPly] ?? null
+    : null;
+
+  await updateBoard(elements.moves.value, false, {
+    skipCpu: true,
+    fromReplay: true,
+    animateMove: moveToAnimate,
+  });
+}
+
+async function stepReplay(delta) {
+  const fullCount = state.fullGame?.moveCount ?? 0;
+  const next = currentViewPly(state.fullGame) + delta;
+  await seekReplay(next, { animate: delta === 1 });
+  if (next >= fullCount) {
+    stopReplayPlayback();
+  }
+}
+
+function scheduleReplayTick() {
+  if (!state.replay.playing) {
+    return;
+  }
+  const generation = state.replay.generation;
+  state.replay.timer = window.setTimeout(async () => {
+    if (!state.replay.playing || generation !== state.replay.generation) {
+      return;
+    }
+    const ply = currentViewPly(state.fullGame);
+    const total = state.fullGame?.moveCount ?? 0;
+    if (ply >= total) {
+      stopReplayPlayback();
+      return;
+    }
+    state.replay.ply = ply + 1 >= total ? null : ply + 1;
+    const move = state.fullGame.history[ply] ?? null;
+    await updateBoard(elements.moves.value, false, {
+      skipCpu: true,
+      fromReplay: true,
+      animateMove: move,
+      replayGeneration: generation,
+    });
+    if (!state.replay.playing || generation !== state.replay.generation) {
+      return;
+    }
+    if (currentViewPly(state.fullGame) >= (state.fullGame?.moveCount ?? 0)) {
+      stopReplayPlayback();
+      return;
+    }
+    scheduleReplayTick();
+  }, Math.max(state.replay.speedMs, SLIDE_DURATION_MS + 80));
+}
+
+async function toggleReplayPlayback() {
+  if (state.replay.playing) {
+    stopReplayPlayback();
+    return;
+  }
+
+  let fullGame;
+  try {
+    fullGame = renderGame(elements.moves.value);
+  } catch (error) {
+    setFeedback(error.message, true);
+    return;
+  }
+  state.fullGame = fullGame;
+
+  if (!fullGame.moveCount) {
+    setFeedback('Add moves before playing the game.', true);
+    return;
+  }
+
+  if (isViewingLive(fullGame)) {
+    state.replay.ply = 0;
+    await updateBoard(elements.moves.value, false, {
+      skipCpu: true,
+      fromReplay: true,
+      animateMove: null,
+    });
+  }
+
+  state.replay.playing = true;
+  paintReplayUi();
+  scheduleReplayTick();
+}
+
+function setReplaySpeed(value) {
+  state.replay.speedMs = resolveReplaySpeed(value);
+  localStorage.setItem(STORAGE_KEYS.replaySpeed, String(state.replay.speedMs));
+  paintReplayUi();
+}
+
+async function copyShareLink() {
+  const url = buildShareUrl(elements.moves.value);
+  try {
+    writeShareHash(elements.moves.value);
+    await navigator.clipboard.writeText(url);
+    setFeedback('Share link copied to the clipboard.');
+  } catch {
+    setFeedback('Could not copy the share link in this browser.', true);
+  }
+}
+
+function loadMovesFromShareHash() {
+  const encoded = parseShareHash();
+  if (encoded == null) {
+    return null;
+  }
+  try {
+    return decodeMovetext(encoded);
+  } catch {
+    setFeedback('Could not decode the shared game from the URL.', true);
+    return null;
   }
 }
 
@@ -987,7 +1440,41 @@ function bindEvents() {
   elements.newGame.addEventListener('click', resetBoard);
   elements.flipBoard?.addEventListener('click', () => setBoardFlipped(!state.flipped));
   elements.copyPgn.addEventListener('click', copyNotation);
+  elements.shareLink?.addEventListener('click', copyShareLink);
   elements.loadDemo?.addEventListener('click', loadDemo);
+
+  elements.replayFirst?.addEventListener('click', () => seekReplay(0, { animate: false }));
+  elements.replayPrev?.addEventListener('click', () => stepReplay(-1));
+  elements.replayNext?.addEventListener('click', () => stepReplay(1));
+  elements.replayLast?.addEventListener('click', () => {
+    const total = state.fullGame?.moveCount ?? 0;
+    seekReplay(total, { animate: false });
+  });
+  elements.replayPlay?.addEventListener('click', () => toggleReplayPlayback());
+  elements.replaySpeed?.addEventListener('change', (event) => setReplaySpeed(event.target.value));
+
+  elements.movesList?.addEventListener('click', (event) => {
+    const target = event.target.closest('[data-ply]');
+    if (!(target instanceof HTMLElement) || !target.dataset.ply) {
+      return;
+    }
+    const ply = Number(target.dataset.ply);
+    if (!Number.isFinite(ply)) {
+      return;
+    }
+    seekReplay(ply, { animate: false });
+  });
+
+  window.addEventListener('hashchange', () => {
+    const shared = loadMovesFromShareHash();
+    if (shared == null) {
+      return;
+    }
+    elements.moves.value = shared;
+    stopReplayPlayback();
+    state.replay.ply = null;
+    updateBoard(shared, true, { skipCpu: true });
+  });
 
   elements.cpuToggle?.addEventListener('click', () => {
     setCpuEnabled(!state.cpu.enabled);
@@ -1009,7 +1496,7 @@ function bindEvents() {
       setFeedback('Choose a save name before storing a local game.', true);
       return;
     }
-    upsertSavedGame(name, elements.moves.value, state.game);
+    upsertSavedGame(name, elements.moves.value, state.fullGame);
     setFeedback(`Saved "${name}" to this browser.`);
   });
 
@@ -1049,16 +1536,33 @@ function bootstrap() {
   document.body.dataset.piecePalette = state.piecePalette;
   elements.pieceSetSelect.value = state.pieceSet;
   elements.piecePaletteSelect.value = state.piecePalette;
-  elements.moves.value = state.draft;
+  if (elements.replaySpeed) {
+    elements.replaySpeed.value = String(state.replay.speedMs);
+  }
+
+  const sharedMoves = loadMovesFromShareHash();
+  const initialMoves = sharedMoves != null ? sharedMoves : state.draft;
+  elements.moves.value = initialMoves;
+  if (sharedMoves != null) {
+    state.draft = sharedMoves;
+  }
+
   syncFlipButton();
   paintClock();
   paintGame(state.game, { skipCpu: true });
+  paintReplayUi();
   drawSavedGames();
   bindEvents();
 
-  if (state.draft) {
-    state.clockMoveSig = moveNumberSignature(state.draft);
-    updateBoard(state.draft, false, { skipCpu: true });
+  if (initialMoves) {
+    state.clockMoveSig = moveNumberSignature(initialMoves);
+    updateBoard(initialMoves, false, { skipCpu: true }).then(() => {
+      if (sharedMoves != null) {
+        setFeedback('Loaded shared board from the link.');
+      }
+    });
+  } else {
+    queueShareHash('');
   }
 
   document.body.classList.add('is-booted');
