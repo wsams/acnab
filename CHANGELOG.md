@@ -1,3 +1,10 @@
+# [1.6.0](https://github.com/wsams/acnab/compare/v1.5.0...v1.6.0) (2026-07-28)
+
+
+### Features
+
+* Add Mario Kart–style CPU pace handicap ([19c3ab3](https://github.com/wsams/acnab/commit/19c3ab33ebb413f7e82d568fa17736cf1aafb4b0))
+
 # [1.5.0](https://github.com/wsams/acnab/compare/v1.4.1...v1.5.0) (2026-07-28)
 
 
