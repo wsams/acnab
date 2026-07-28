@@ -27,13 +27,22 @@ writeFileSync(
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="refresh" content="0; url=web/" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>acnab</title>
   <link rel="canonical" href="web/" />
+  <script>
+    (function () {
+      var target = 'web/' + location.search + location.hash;
+      location.replace(target);
+    })();
+  </script>
+  <meta http-equiv="refresh" content="0; url=web/" />
 </head>
 <body>
-  <p><a href="web/">Open acnab</a></p>
+  <p><a id="open-acnab" href="web/">Open acnab</a></p>
+  <script>
+    document.getElementById('open-acnab').href = 'web/' + location.search + location.hash;
+  </script>
 </body>
 </html>
 `,

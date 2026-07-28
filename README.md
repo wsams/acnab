@@ -56,8 +56,13 @@ GitHub Pages publishes the static UI from `web/` (the site root redirects there)
 - localStorage drafts and named saves
 - theme, SVG piece-set, and piece-color switching plus FEN/status summaries
 - flip board for couch co-op
+- shareable board links (notation encoded in the URL hash; opening a link resets to the start and autoplays)
+- play controls to step through or autoplay a game with sliding piece animation
 - optional CPU opponent (Stockfish.js 18 WASM, skill/Elo presets) — off by default; coin toss for who plays White
 - no CDN runtime dependency for the chess engine (Stockfish is vendored under `web/vendor/stockfish/`, GPLv3)
+
+Example shared game (opens at move 1 and plays through to mate):
+[Open the demo board](https://wsams.github.io/acnab/web/#g=MS4gZTQgYzUgMi4gTmYzIGQ2IDMuIGQ0IGN4ZDQgNC4gTnhkNCBiNSA1LiBCeGI1KyBCZDcgNi4gTmMzIGY1IDcuIGV4ZjUgZzYgOC4gUWYzIGd4ZjUgOS4gUWg1Iw)
 
 ### Local static preview
 
