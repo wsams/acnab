@@ -1,3 +1,10 @@
+# [1.4.0](https://github.com/wsams/acnab/compare/v1.3.0...v1.4.0) (2026-07-28)
+
+
+### Features
+
+* Shareable board links and animated play controls ([#11](https://github.com/wsams/acnab/issues/11)) ([1e0308b](https://github.com/wsams/acnab/commit/1e0308b3e798b3d570f7bdfb345d0cd8ccf2c7c0))
+
 # [1.3.0](https://github.com/wsams/acnab/compare/v1.2.1...v1.3.0) (2026-07-24)
 
 
