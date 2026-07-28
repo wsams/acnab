@@ -24,7 +24,7 @@ import {
 import {
   buildShareUrl,
   decodeMovetext,
-  parseShareHash,
+  parseShareLocation,
   writeShareHash,
 } from './share.js';
 
@@ -101,6 +101,7 @@ const state = {
     playing: false,
     timer: null,
     generation: 0,
+    announceFinish: false,
     speedMs: resolveReplaySpeed(localStorage.getItem(STORAGE_KEYS.replaySpeed)),
   },
   cpu: {
@@ -1008,14 +1009,19 @@ async function animateBoardMove(move, nextGame) {
   playLandingSplash(move.to);
 }
 
-function stopReplayPlayback() {
+function stopReplayPlayback({ finished = false } = {}) {
+  const shouldAnnounce = finished && state.replay.announceFinish;
   state.replay.playing = false;
+  state.replay.announceFinish = false;
   state.replay.generation += 1;
   if (state.replay.timer != null) {
     window.clearTimeout(state.replay.timer);
     state.replay.timer = null;
   }
   paintReplayUi();
+  if (shouldAnnounce) {
+    setFeedback('Playback finished.');
+  }
 }
 
 function paintReplayUi() {
@@ -1245,7 +1251,7 @@ function scheduleReplayTick() {
     const ply = currentViewPly(state.fullGame);
     const total = state.fullGame?.moveCount ?? 0;
     if (ply >= total) {
-      stopReplayPlayback();
+      stopReplayPlayback({ finished: true });
       return;
     }
     state.replay.ply = ply + 1 >= total ? null : ply + 1;
@@ -1260,34 +1266,31 @@ function scheduleReplayTick() {
       return;
     }
     if (currentViewPly(state.fullGame) >= (state.fullGame?.moveCount ?? 0)) {
-      stopReplayPlayback();
+      stopReplayPlayback({ finished: true });
       return;
     }
     scheduleReplayTick();
   }, Math.max(state.replay.speedMs, SLIDE_DURATION_MS + 80));
 }
 
-async function toggleReplayPlayback() {
-  if (state.replay.playing) {
-    stopReplayPlayback();
-    return;
-  }
-
+async function startReplayPlayback({ fromStart = false } = {}) {
   let fullGame;
   try {
     fullGame = renderGame(elements.moves.value);
   } catch (error) {
     setFeedback(error.message, true);
-    return;
+    return false;
   }
   state.fullGame = fullGame;
 
   if (!fullGame.moveCount) {
     setFeedback('Add moves before playing the game.', true);
-    return;
+    return false;
   }
 
-  if (isViewingLive(fullGame)) {
+  stopReplayPlayback();
+
+  if (fromStart || isViewingLive(fullGame)) {
     state.replay.ply = 0;
     await updateBoard(elements.moves.value, false, {
       skipCpu: true,
@@ -1299,6 +1302,18 @@ async function toggleReplayPlayback() {
   state.replay.playing = true;
   paintReplayUi();
   scheduleReplayTick();
+  return true;
+}
+
+async function toggleReplayPlayback() {
+  if (state.replay.playing) {
+    stopReplayPlayback();
+    return;
+  }
+  const started = await startReplayPlayback({ fromStart: isViewingLive() });
+  if (started) {
+    setFeedback('Playing game…');
+  }
 }
 
 function setReplaySpeed(value) {
@@ -1318,8 +1333,8 @@ async function copyShareLink() {
   }
 }
 
-function loadMovesFromShareHash() {
-  const encoded = parseShareHash();
+function loadMovesFromShareLocation() {
+  const encoded = parseShareLocation();
   if (encoded == null) {
     return null;
   }
@@ -1329,6 +1344,58 @@ function loadMovesFromShareHash() {
     setFeedback('Could not decode the shared game from the URL.', true);
     return null;
   }
+}
+
+/**
+ * Load movetext from a share link: reset to the start position and autoplay.
+ */
+async function openSharedGame(moves, {
+  autoplay = true,
+  feedback = 'Playing shared game…',
+} = {}) {
+  const text = String(moves ?? '');
+  elements.moves.value = text;
+  state.draft = text;
+  localStorage.setItem(STORAGE_KEYS.draft, text);
+
+  if (state.cpu.enabled) {
+    cancelCpuSearch();
+  }
+
+  stopReplayPlayback();
+  state.replay.ply = 0;
+  writeShareHash(text);
+
+  try {
+    renderGame(text);
+  } catch (error) {
+    setFeedback(error.message, true);
+    await updateBoard(text, false, { skipCpu: true });
+    return false;
+  }
+
+  await updateBoard(text, false, {
+    skipCpu: true,
+    fromReplay: true,
+    animateMove: null,
+  });
+
+  if (!autoplay) {
+    setFeedback(feedback || 'Loaded shared board from the link.');
+    return true;
+  }
+
+  if (!state.fullGame?.moveCount) {
+    setFeedback('Shared link loaded an empty board.');
+    return true;
+  }
+
+  const started = await startReplayPlayback({ fromStart: true });
+  if (started) {
+    state.replay.announceFinish = true;
+    setFeedback(feedback);
+  }
+  return started;
 }
 
 function queueLiveRender() {
@@ -1412,11 +1479,9 @@ async function copyNotation() {
 }
 
 function loadDemo() {
-  elements.moves.value = DEMO_MOVES;
-  stopReplayPlayback();
-  state.replay.ply = 0;
-  updateBoard(DEMO_MOVES, false, { skipCpu: true, fromReplay: true }).then(() => {
-    setFeedback('Demo loaded at the start — press Play to watch, or Share to copy a link.');
+  openSharedGame(DEMO_MOVES, {
+    autoplay: true,
+    feedback: 'Playing demo…',
   });
   elements.moves.focus();
 }
@@ -1470,14 +1535,14 @@ function bindEvents() {
   });
 
   window.addEventListener('hashchange', () => {
-    const shared = loadMovesFromShareHash();
+    const shared = loadMovesFromShareLocation();
     if (shared == null) {
       return;
     }
-    elements.moves.value = shared;
-    stopReplayPlayback();
-    state.replay.ply = null;
-    updateBoard(shared, true, { skipCpu: true });
+    openSharedGame(shared, {
+      autoplay: true,
+      feedback: 'Playing shared game…',
+    });
   });
 
   elements.cpuToggle?.addEventListener('click', () => {
@@ -1544,7 +1609,7 @@ function bootstrap() {
     elements.replaySpeed.value = String(state.replay.speedMs);
   }
 
-  const sharedMoves = loadMovesFromShareHash();
+  const sharedMoves = loadMovesFromShareLocation();
   const initialMoves = sharedMoves != null ? sharedMoves : state.draft;
   elements.moves.value = initialMoves;
   if (sharedMoves != null) {
@@ -1558,13 +1623,14 @@ function bootstrap() {
   drawSavedGames();
   bindEvents();
 
-  if (initialMoves) {
-    state.clockMoveSig = moveNumberSignature(initialMoves);
-    updateBoard(initialMoves, false, { skipCpu: true }).then(() => {
-      if (sharedMoves != null) {
-        setFeedback('Loaded shared board from the link.');
-      }
+  if (sharedMoves != null) {
+    openSharedGame(sharedMoves, {
+      autoplay: true,
+      feedback: 'Playing shared game…',
     });
+  } else if (initialMoves) {
+    state.clockMoveSig = moveNumberSignature(initialMoves);
+    updateBoard(initialMoves, false, { skipCpu: true });
   } else {
     queueShareHash('');
   }
