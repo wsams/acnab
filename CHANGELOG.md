@@ -1,3 +1,10 @@
+# [1.7.0](https://github.com/wsams/acnab/compare/v1.6.0...v1.7.0) (2026-07-28)
+
+
+### Features
+
+* Mobile play dock keeps board and notation together ([f6e5531](https://github.com/wsams/acnab/commit/f6e5531e684252af22e69f9fd800a4a61ddcd7df))
+
 # [1.6.0](https://github.com/wsams/acnab/compare/v1.5.0...v1.6.0) (2026-07-28)
 
 
