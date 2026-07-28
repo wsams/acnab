@@ -94,6 +94,7 @@ const state = {
   clockMoveSig: '',
   requestTimer: null,
   typingResumeTimer: null,
+  moveNumberPrimeTimer: null,
   shareTimer: null,
   animToken: 0,
   replay: {
@@ -536,11 +537,19 @@ async function maybeRequestCpuMove(game) {
     }
 
     const san = sanFromUci(game.fen, uciMove);
-    const nextMoves = formatMovetext([...game.appliedMoves, san]);
+    const applied = [...game.appliedMoves, san];
+    // After White (CPU as first player), leave a trailing space so Black can type SAN.
+    // After Black, leave clean movetext — next `N. ` priming adds the spaced prefix.
+    let nextMoves = formatMovetext(applied);
+    if (applied.length % 2 === 1) {
+      nextMoves = ensureTrailingSanSpace(nextMoves);
+    }
     elements.moves.value = nextMoves;
     state.cpu.thinking = false;
     state.cpu.lastThoughtFen = null;
     updateBoard(nextMoves, false, { skipCpu: true });
+    const caret = nextMoves.length;
+    elements.moves.setSelectionRange(caret, caret);
     setFeedback(`CPU played ${san}.`);
     paintCpuUi();
   } catch (error) {
@@ -1114,10 +1123,105 @@ async function paintGame(game, {
     syncClockFromNotation(elements.moves.value, state.fullGame, { previousMoveCount: priorCount });
   }
 
+  if (isViewingLive()) {
+    queueNextMoveNumberPrime(state.fullGame ?? game, priorCount);
+  }
+
   if (!skipCpu && isViewingLive()) {
     maybeRequestCpuMove(state.fullGame);
   } else {
     paintCpuUi();
+  }
+}
+
+/** True when movetext already ends with `N. ` (space after the period) for White. */
+function hasTrailingMoveNumber(text, moveNumber) {
+  return new RegExp(`(?:^|\\s)${moveNumber}\\.\\s+$`).test(String(text ?? ''));
+}
+
+/** Ensure movetext ends with a single space so the next SAN can be typed immediately. */
+function ensureTrailingSanSpace(text) {
+  const value = String(text ?? '');
+  if (!value) {
+    return value;
+  }
+  return /\s$/.test(value) ? value : `${value} `;
+}
+
+/** Build `… N. ` with a guaranteed space after the period. */
+function withNextMoveNumberPrefix(text, nextNumber) {
+  let base = String(text ?? '').replace(/\s+$/, '');
+  base = base.replace(new RegExp(`(?:^|\\s)${nextNumber}\\.$`), '').replace(/\s+$/, '');
+  return base ? `${base} ${nextNumber}. ` : `${nextNumber}. `;
+}
+
+/**
+ * After Black completes a move, wait briefly then type the next `N. `
+ * so White can enter SAN without the number, period, and space.
+ * Also upgrades a bare trailing `N.` to `N. ` if the space is missing.
+ */
+function queueNextMoveNumberPrime(game, previousMoveCount) {
+  clearTimeout(state.moveNumberPrimeTimer);
+  state.moveNumberPrimeTimer = null;
+
+  if (!game || game.isGameOver || game.moveCount === 0) {
+    return;
+  }
+  // Black just finished a full turn (even half-move count, White to move).
+  if (game.moveCount % 2 !== 0 || game.turn !== 'white') {
+    return;
+  }
+
+  const nextNumber = game.moveCount / 2 + 1;
+  if (hasTrailingMoveNumber(elements.moves.value, nextNumber)) {
+    return;
+  }
+
+  const blackJustMoved = previousMoveCount < game.moveCount;
+  const trimmed = elements.moves.value.replace(/\s+$/, '');
+  const endsWithBareNumber = new RegExp(`(?:^|\\s)${nextNumber}\\.$`).test(trimmed);
+  if (!blackJustMoved && !endsWithBareNumber) {
+    return;
+  }
+
+  const snapshotCount = game.moveCount;
+  const snapshotFen = game.fen;
+  state.moveNumberPrimeTimer = window.setTimeout(() => {
+    state.moveNumberPrimeTimer = null;
+    primeNextMoveNumber({ moveCount: snapshotCount, fen: snapshotFen });
+  }, 280);
+}
+
+function primeNextMoveNumber({ moveCount, fen }) {
+  if (!state.fullGame || state.fullGame.isGameOver || !isViewingLive()) {
+    return;
+  }
+  // Bail if the player edited away from that completed Black reply.
+  if (state.fullGame.moveCount !== moveCount || state.fullGame.fen !== fen) {
+    return;
+  }
+  if (moveCount % 2 !== 0 || state.fullGame.turn !== 'white') {
+    return;
+  }
+
+  const nextNumber = moveCount / 2 + 1;
+  const current = elements.moves.value;
+  if (hasTrailingMoveNumber(current, nextNumber)) {
+    return;
+  }
+
+  const next = withNextMoveNumberPrefix(current, nextNumber);
+  const selectionStart = elements.moves.selectionStart;
+  const selectionEnd = elements.moves.selectionEnd;
+  const atEnd = selectionStart === current.length && selectionEnd === current.length;
+
+  elements.moves.value = next;
+  // Sync board/clock (move number presses the clock) without clearing CPU messages.
+  updateBoard(next, false, { skipCpu: true });
+
+  if (atEnd || document.activeElement === elements.moves) {
+    const caret = next.length;
+    elements.moves.setSelectionRange(caret, caret);
   }
 }
 
@@ -1196,6 +1300,9 @@ async function updateBoard(moves, announce = true, {
       elements.feedback.classList.remove('is-error');
     }
   } catch (error) {
+    // Keep last good position; still handle notation clock presses from raw text.
+    clearTimeout(state.moveNumberPrimeTimer);
+    state.moveNumberPrimeTimer = null;
     if (state.cpu.enabled) {
       cancelCpuSearch();
     }
