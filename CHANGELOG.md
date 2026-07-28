@@ -1,3 +1,10 @@
+# [1.5.0](https://github.com/wsams/acnab/compare/v1.4.1...v1.5.0) (2026-07-28)
+
+
+### Features
+
+* Auto-type next move number (with trailing spaces) ([3799dd2](https://github.com/wsams/acnab/commit/3799dd289253df6c38f5e68ce3ba65db570cecce))
+
 ## [1.4.1](https://github.com/wsams/acnab/compare/v1.4.0...v1.4.1) (2026-07-28)
 
 
