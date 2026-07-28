@@ -1,3 +1,11 @@
+## [1.7.1](https://github.com/wsams/acnab/compare/v1.7.0...v1.7.1) (2026-07-28)
+
+
+### Bug Fixes
+
+* Pulse check/mate via square shadows, not piece filters ([96fe69d](https://github.com/wsams/acnab/commit/96fe69d4ec60f79881a34e7e2d55a661bd72d56d))
+* Stop board-wide settle jitter and enrich move effects ([82b641a](https://github.com/wsams/acnab/commit/82b641ab65b483edde67a2835356b95e465b522c))
+
 # [1.7.0](https://github.com/wsams/acnab/compare/v1.6.0...v1.7.0) (2026-07-28)
 
 
