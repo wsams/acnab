@@ -8,7 +8,13 @@ import {
   CPU_LEVELS,
   DEFAULT_CPU_LEVEL,
   StockfishCpu,
+  averageHumanThinkMs,
+  cpuPaceTargetMs,
+  formatPaceDuration,
+  normalizeHumanThinkSample,
+  resolveCpuHandicap,
   resolveCpuLevel,
+  sleep,
   tossCoinForSides,
 } from './cpu.js';
 import {
@@ -38,6 +44,7 @@ const STORAGE_KEYS = {
   clockPreset: 'acnab:clock-preset',
   clockMode: 'acnab:clock-mode',
   cpuLevel: 'acnab:cpu-level',
+  cpuHandicap: 'acnab:cpu-handicap',
   replaySpeed: 'acnab:replay-speed',
 };
 
@@ -108,12 +115,17 @@ const state = {
   cpu: {
     enabled: false,
     levelId: resolveCpuLevel(localStorage.getItem(STORAGE_KEYS.cpuLevel)),
+    handicap: resolveCpuHandicap(localStorage.getItem(STORAGE_KEYS.cpuHandicap)),
     humanSide: null,
     cpuSide: null,
     tossing: false,
     thinking: false,
     requestId: 0,
     lastThoughtFen: null,
+    humanTurnStartedAt: null,
+    humanTurnStartMoveCount: null,
+    humanTurnDurations: [],
+    paceTargetMs: null,
   },
 };
 
@@ -165,6 +177,8 @@ const elements = {
   cpuControls: document.querySelector('#cpu-controls'),
   cpuLevel: document.querySelector('#cpu-level'),
   cpuLevelHint: document.querySelector('#cpu-level-hint'),
+  cpuHandicap: document.querySelector('#cpu-handicap'),
+  cpuHandicapHint: document.querySelector('#cpu-handicap-hint'),
   cpuNewMatch: document.querySelector('#cpu-new-match'),
   cpuMatch: document.querySelector('#cpu-match'),
   coinStage: document.querySelector('#coin-stage'),
@@ -304,10 +318,11 @@ function sideLabel(side) {
 }
 
 function paintCpuUi() {
-  const { enabled, tossing, thinking, humanSide, levelId } = state.cpu;
+  const { enabled, tossing, thinking, humanSide, levelId, handicap } = state.cpu;
   elements.cpuPanel?.setAttribute('data-enabled', enabled ? 'true' : 'false');
   elements.cpuPanel?.classList.toggle('is-thinking', thinking);
   elements.cpuPanel?.classList.toggle('is-tossing', tossing);
+  elements.cpuPanel?.classList.toggle('is-pace-on', Boolean(handicap));
 
   if (elements.cpuToggle) {
     elements.cpuToggle.setAttribute('aria-pressed', enabled ? 'true' : 'false');
@@ -329,6 +344,12 @@ function paintCpuUi() {
   if (elements.cpuToggle) {
     elements.cpuToggle.disabled = tossing;
   }
+  if (elements.cpuHandicap) {
+    elements.cpuHandicap.setAttribute('aria-pressed', handicap ? 'true' : 'false');
+    elements.cpuHandicap.textContent = handicap ? 'Pace on' : 'Pace off';
+    elements.cpuHandicap.disabled = tossing;
+  }
+  updateCpuHandicapHint();
 
   if (!enabled) {
     if (elements.cpuStatus) {
@@ -359,8 +380,14 @@ function paintCpuUi() {
   }
 
   const level = CPU_LEVELS[levelId];
+  const avgLabel = formatPaceDuration(averageHumanThinkMs(state.cpu.humanTurnDurations));
   if (thinking) {
-    elements.cpuStatus.textContent = `Stockfish (${level.label}) is thinking…`;
+    const targetLabel = formatPaceDuration(state.cpu.paceTargetMs);
+    if (handicap && targetLabel && avgLabel) {
+      elements.cpuStatus.textContent = `Stockfish (${level.label}) pacing to your ~${avgLabel} average…`;
+    } else {
+      elements.cpuStatus.textContent = `Stockfish (${level.label}) is thinking…`;
+    }
     return;
   }
 
@@ -370,16 +397,97 @@ function paintCpuUi() {
   }
 
   if (state.game?.turn === humanSide) {
-    elements.cpuStatus.textContent = `Your turn as ${sideLabel(humanSide)} · enter a move in notation.`;
+    const paceNote = handicap && avgLabel ? ` · pace ~${avgLabel}` : '';
+    elements.cpuStatus.textContent = `Your turn as ${sideLabel(humanSide)} · enter a move in notation${paceNote}.`;
   } else {
     elements.cpuStatus.textContent = `CPU to move as ${sideLabel(state.cpu.cpuSide)}.`;
   }
+}
+
+function updateCpuHandicapHint() {
+  if (!elements.cpuHandicapHint) {
+    return;
+  }
+  if (!state.cpu.handicap) {
+    elements.cpuHandicapHint.textContent = 'Pace off — CPU replies as soon as Stockfish finishes at this strength.';
+    return;
+  }
+  const avgLabel = formatPaceDuration(averageHumanThinkMs(state.cpu.humanTurnDurations));
+  if (avgLabel) {
+    elements.cpuHandicapHint.textContent = `Pace on — CPU aims for your ~${avgLabel} average think time so the clocks stay even.`;
+  } else {
+    elements.cpuHandicapHint.textContent = 'Pace on — after a few of your moves, the CPU will match your average think time.';
+  }
+}
+
+function resetCpuPaceTracking() {
+  state.cpu.humanTurnStartedAt = null;
+  state.cpu.humanTurnStartMoveCount = null;
+  state.cpu.humanTurnDurations = [];
+  state.cpu.paceTargetMs = null;
+}
+
+function recordHumanThinkTime(elapsedMs) {
+  const sample = normalizeHumanThinkSample(elapsedMs);
+  if (sample == null) {
+    return;
+  }
+  state.cpu.humanTurnDurations.push(sample);
+  if (state.cpu.humanTurnDurations.length > 12) {
+    state.cpu.humanTurnDurations.shift();
+  }
+}
+
+/**
+ * Track how long the human spends on each turn so the CPU can match that pace.
+ */
+function syncHumanTurnTiming(game, previousMoveCount, previousTurn) {
+  if (!state.cpu.enabled || !state.cpu.humanSide || state.cpu.tossing) {
+    return;
+  }
+
+  const humanSide = state.cpu.humanSide;
+  const previousWasHuman = previousTurn === humanSide;
+  const humanMoved = previousWasHuman
+    && game.moveCount > previousMoveCount
+    && state.cpu.humanTurnStartedAt != null;
+
+  if (humanMoved) {
+    recordHumanThinkTime(performance.now() - state.cpu.humanTurnStartedAt);
+    state.cpu.humanTurnStartedAt = null;
+    state.cpu.humanTurnStartMoveCount = null;
+  }
+
+  if (game.isGameOver || game.turn !== humanSide) {
+    return;
+  }
+
+  // Start (or restart) the human think clock when their turn begins.
+  if (
+    state.cpu.humanTurnStartedAt == null
+    || state.cpu.humanTurnStartMoveCount !== game.moveCount
+  ) {
+    state.cpu.humanTurnStartedAt = performance.now();
+    state.cpu.humanTurnStartMoveCount = game.moveCount;
+  }
+}
+
+function setCpuHandicap(enabled) {
+  state.cpu.handicap = Boolean(enabled);
+  localStorage.setItem(STORAGE_KEYS.cpuHandicap, state.cpu.handicap ? '1' : '0');
+  paintCpuUi();
+  setFeedback(
+    state.cpu.handicap
+      ? 'Pace handicap on — CPU will match your average think time.'
+      : 'Pace handicap off — CPU replies at engine speed.',
+  );
 }
 
 function cancelCpuSearch() {
   state.cpu.requestId += 1;
   state.cpu.thinking = false;
   state.cpu.lastThoughtFen = null;
+  state.cpu.paceTargetMs = null;
   try {
     stockfish.stop();
   } catch {
@@ -399,6 +507,7 @@ async function setCpuEnabled(enabled) {
     state.cpu.humanSide = null;
     state.cpu.cpuSide = null;
     state.cpu.tossing = false;
+    resetCpuPaceTracking();
     paintCpuUi();
     setFeedback('CPU player turned off. Notation-only mode.');
     return;
@@ -443,6 +552,7 @@ async function startCpuMatch({ announceEngine = true } = {}) {
   }
 
   cancelCpuSearch();
+  resetCpuPaceTracking();
   state.cpu.tossing = true;
   state.cpu.humanSide = null;
   state.cpu.cpuSide = null;
@@ -494,6 +604,12 @@ async function startCpuMatch({ announceEngine = true } = {}) {
     setFeedback(`${faceLabel} — you are ${humanName}. Stockfish is ready.`);
   }
 
+  // Start human think clock if they go first.
+  if (result.humanSide === 'white') {
+    state.cpu.humanTurnStartedAt = performance.now();
+    state.cpu.humanTurnStartMoveCount = 0;
+  }
+
   maybeRequestCpuMove(state.game);
 }
 
@@ -525,7 +641,17 @@ async function maybeRequestCpuMove(game) {
   state.cpu.requestId = requestId;
   state.cpu.thinking = true;
   state.cpu.lastThoughtFen = game.fen;
+
+  const level = CPU_LEVELS[state.cpu.levelId];
+  const targetMs = cpuPaceTargetMs({
+    handicap: state.cpu.handicap,
+    samples: state.cpu.humanTurnDurations,
+    fallbackMs: level.movetime,
+  });
+  state.cpu.paceTargetMs = targetMs;
   paintCpuUi();
+
+  const searchStartedAt = performance.now();
 
   try {
     const uciMove = await stockfish.chooseMove(game.fen, { levelId: state.cpu.levelId });
@@ -534,6 +660,20 @@ async function maybeRequestCpuMove(game) {
     }
     if (state.game.fen !== game.fen) {
       return;
+    }
+
+    // Keep skill search limits; pad wall-clock time so the CPU burns ~human average.
+    if (state.cpu.handicap) {
+      const remaining = targetMs - (performance.now() - searchStartedAt);
+      if (remaining > 50) {
+        await sleep(remaining);
+      }
+      if (requestId !== state.cpu.requestId || !state.cpu.enabled) {
+        return;
+      }
+      if (state.game.fen !== game.fen) {
+        return;
+      }
     }
 
     const san = sanFromUci(game.fen, uciMove);
@@ -547,6 +687,7 @@ async function maybeRequestCpuMove(game) {
     elements.moves.value = nextMoves;
     state.cpu.thinking = false;
     state.cpu.lastThoughtFen = null;
+    state.cpu.paceTargetMs = null;
     updateBoard(nextMoves, false, { skipCpu: true });
     const caret = nextMoves.length;
     elements.moves.setSelectionRange(caret, caret);
@@ -558,6 +699,7 @@ async function maybeRequestCpuMove(game) {
     }
     state.cpu.thinking = false;
     state.cpu.lastThoughtFen = null;
+    state.cpu.paceTargetMs = null;
     paintCpuUi();
     if (error?.message === 'Search cancelled.') {
       return;
@@ -1104,6 +1246,7 @@ async function paintGame(game, {
   previousMoveCount = null,
 } = {}) {
   const priorCount = previousMoveCount ?? state.game?.moveCount ?? 0;
+  const previousTurn = state.game?.turn ?? null;
   state.game = game;
 
   if (animateMove) {
@@ -1124,6 +1267,7 @@ async function paintGame(game, {
   }
 
   if (isViewingLive()) {
+    syncHumanTurnTiming(state.fullGame ?? game, priorCount, previousTurn);
     queueNextMoveNumberPrime(state.fullGame ?? game, priorCount);
   }
 
@@ -1656,6 +1800,9 @@ function bindEvents() {
     setCpuEnabled(!state.cpu.enabled);
   });
   elements.cpuLevel?.addEventListener('change', (event) => applyCpuLevel(event.target.value));
+  elements.cpuHandicap?.addEventListener('click', () => {
+    setCpuHandicap(!state.cpu.handicap);
+  });
   elements.cpuNewMatch?.addEventListener('click', () => startCpuMatch());
 
   document.querySelectorAll('[data-focus-moves]').forEach((node) => {
