@@ -41,7 +41,7 @@ const STORAGE_KEYS = {
   replaySpeed: 'acnab:replay-speed',
 };
 
-const DEMO_MOVES = '1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7';
+const DEMO_MOVES = '1. e4 c5 2. Nf3 d6 3. d4 cxd4 4. Nxd4 b5 5. Bxb5+ Bd7 6. Nc3 f5 7. exf5 g6 8. Qf3 gxf5 9. Qh5#';
 
 const SLIDE_DURATION_MS = 620;
 const REPLAY_SPEEDS = new Set(['1400', '950', '600']);
@@ -1413,7 +1413,11 @@ async function copyNotation() {
 
 function loadDemo() {
   elements.moves.value = DEMO_MOVES;
-  updateBoard(DEMO_MOVES, true);
+  stopReplayPlayback();
+  state.replay.ply = 0;
+  updateBoard(DEMO_MOVES, false, { skipCpu: true, fromReplay: true }).then(() => {
+    setFeedback('Demo loaded at the start — press Play to watch, or Share to copy a link.');
+  });
   elements.moves.focus();
 }
 

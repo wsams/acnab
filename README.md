@@ -61,6 +61,9 @@ GitHub Pages publishes the static UI from `web/` (the site root redirects there)
 - optional CPU opponent (Stockfish.js 18 WASM, skill/Elo presets) — off by default; coin toss for who plays White
 - no CDN runtime dependency for the chess engine (Stockfish is vendored under `web/vendor/stockfish/`, GPLv3)
 
+Example shared game (mate in the Sicilian):
+[Open the demo board](https://wsams.github.io/acnab/web/#g=MS4gZTQgYzUgMi4gTmYzIGQ2IDMuIGQ0IGN4ZDQgNC4gTnhkNCBiNSA1LiBCeGI1KyBCZDcgNi4gTmMzIGY1IDcuIGV4ZjUgZzYgOC4gUWYzIGd4ZjUgOS4gUWg1Iw)
+
 ### Local static preview
 
 ```bash
