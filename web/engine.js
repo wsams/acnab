@@ -350,3 +350,69 @@ export function formatMovetext(sans) {
   }
   return parts.join(' ');
 }
+
+/** Ensure movetext ends with a single space so the next SAN can be typed immediately. */
+export function ensureTrailingSanSpace(text) {
+  const value = String(text ?? '');
+  if (!value) {
+    return value;
+  }
+  return /\s$/.test(value) ? value : `${value} `;
+}
+
+/**
+ * Append one SAN to the applied half-moves and format paired movetext.
+ * After White's move, leave a trailing space so Black's SAN can follow.
+ */
+export function appendSanToMovetext(appliedSans, san) {
+  const next = [...(Array.isArray(appliedSans) ? appliedSans : []), san];
+  let text = formatMovetext(next);
+  if (next.length % 2 === 1) {
+    text = ensureTrailingSanSpace(text);
+  }
+  return text;
+}
+
+function describeVerboseMove(move) {
+  return {
+    from: move.from,
+    to: move.to,
+    promotion: move.promotion || null,
+    san: move.san,
+    captured: move.captured || null,
+    piece: move.piece,
+  };
+}
+
+/** Legal moves from one square in the given position. */
+export function legalMovesFromSquare(fen, square) {
+  const chess = new Chess(fen);
+  return chess.moves({ square, verbose: true }).map(describeVerboseMove);
+}
+
+/**
+ * Choose the CPU move to show. Levels below Stockfish's 1320 floor pass a
+ * blunderRate; that fraction of moves is a uniform random legal move.
+ */
+export function selectCpuMove(fen, engineMove, { blunderRate = 0, rng = Math.random } = {}) {
+  const chess = new Chess(fen);
+  const legal = chess.moves({ verbose: true }).map(describeVerboseMove);
+  if (!legal.length) {
+    throw new Error('No legal moves.');
+  }
+
+  const blunder = blunderRate > 0 && rng() < blunderRate;
+  if (!blunder && engineMove) {
+    const match = legal.find((move) => (
+      move.from === engineMove.from
+      && move.to === engineMove.to
+      && (move.promotion || null) === (engineMove.promotion || null)
+    ));
+    if (match) {
+      return match;
+    }
+  }
+
+  const index = Math.min(legal.length - 1, Math.floor(rng() * legal.length));
+  return legal[index];
+}

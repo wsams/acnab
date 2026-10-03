@@ -1,6 +1,15 @@
 /**
- * Browser CPU opponent powered by Stockfish.js 18 (WASM).
- * Strength uses Stockfish Skill Level and UCI_Elo for a wide rating band.
+ * Browser CPU opponent powered by Stockfish.js 18 lite (WASM).
+ *
+ * Ratings from 1320 through 3190 use UCI_LimitStrength and UCI_Elo. That is
+ * Stockfish's own CCRL-blitz scale (search.h Skill, Stockfish 18): the engine
+ * converts Elo to an internal skill level and commits a weakened move at
+ * depth = 1 + floor(skill). Searching past that depth does not change the
+ * chosen move, and stopping before it makes the label inaccurate.
+ *
+ * Stockfish cannot aim below 1320. Beginner and Casual still call the 1320
+ * engine, then replace a fixed fraction of moves with a random legal move.
+ * Those two labels are approximate and are marked that way in the UI.
  */
 
 const STOCKFISH_WORKER_URL = new URL(
@@ -8,102 +17,170 @@ const STOCKFISH_WORKER_URL = new URL(
   import.meta.url,
 );
 
+/** Inclusive Elo range accepted by Stockfish 18 UCI_Elo. */
+export const STOCKFISH_ELO_MIN = 1320;
+export const STOCKFISH_ELO_MAX = 3190;
+
 /**
- * Named strength presets mapped to Stockfish UCI options.
- * Elo labels are approximate; calibrated around casual/CCRL-style play.
+ * Named strength presets. `elo` is a real UCI_Elo value on every limited
+ * level. `blunderRate` is an extra, approximate weakening below the floor.
  */
 export const CPU_LEVELS = {
   beginner: {
     id: 'beginner',
-    label: 'Beginner (~800)',
-    description: 'Makes frequent mistakes — great for learning.',
-    skillLevel: 0,
-    limitStrength: false,
-    elo: null,
-    depth: 5,
-    movetime: 250,
+    label: 'Beginner (approx.)',
+    description: 'Below Stockfish’s 1320 floor. Half the moves are random legal moves; the rest are the 1320 engine.',
+    skillLevel: 20,
+    limitStrength: true,
+    elo: 1320,
+    blunderRate: 0.5,
+    movetime: 2000,
   },
   casual: {
     id: 'casual',
-    label: 'Casual (~1000)',
-    description: 'Solid basics with occasional blunders.',
-    skillLevel: 3,
-    limitStrength: false,
-    elo: null,
-    depth: 7,
-    movetime: 350,
+    label: 'Casual (approx.)',
+    description: 'Below Stockfish’s 1320 floor. About one move in four is random; the rest are the 1320 engine.',
+    skillLevel: 20,
+    limitStrength: true,
+    elo: 1320,
+    blunderRate: 0.25,
+    movetime: 2000,
   },
   intermediate: {
     id: 'intermediate',
-    label: 'Intermediate (~1200)',
-    description: 'Club-adjacent play with tactical gaps.',
-    skillLevel: 6,
-    limitStrength: false,
-    elo: null,
-    depth: 9,
-    movetime: 450,
+    label: 'Intermediate (1320)',
+    description: 'Stockfish limited to 1320, the bottom of its calibrated CCRL blitz scale.',
+    skillLevel: 20,
+    limitStrength: true,
+    elo: 1320,
+    blunderRate: 0,
+    movetime: 2000,
   },
   club: {
     id: 'club',
-    label: 'Club (~1400)',
-    description: 'Stockfish strength-limited near club level.',
+    label: 'Club (1400)',
+    description: 'Stockfish limited to 1400 on its calibrated scale.',
     skillLevel: 20,
     limitStrength: true,
     elo: 1400,
-    depth: 11,
-    movetime: 600,
+    blunderRate: 0,
+    movetime: 2000,
   },
   advanced: {
     id: 'advanced',
-    label: 'Advanced (~1600)',
-    description: 'Strong positional sense; fewer free pieces.',
+    label: 'Advanced (1600)',
+    description: 'Stockfish limited to 1600 on its calibrated scale.',
     skillLevel: 20,
     limitStrength: true,
     elo: 1600,
-    depth: 12,
-    movetime: 750,
+    blunderRate: 0,
+    movetime: 2000,
   },
   expert: {
     id: 'expert',
-    label: 'Expert (~1800)',
-    description: 'Punishes inaccurate openings and endgames.',
+    label: 'Expert (1800)',
+    description: 'Stockfish limited to 1800 on its calibrated scale.',
     skillLevel: 20,
     limitStrength: true,
     elo: 1800,
-    depth: 14,
-    movetime: 900,
+    blunderRate: 0,
+    movetime: 2000,
   },
   master: {
     id: 'master',
-    label: 'Master (~2100)',
-    description: 'Very strong; expects precise defense.',
+    label: 'Master (2100)',
+    description: 'Stockfish limited to 2100 on its calibrated scale.',
     skillLevel: 20,
     limitStrength: true,
     elo: 2100,
-    depth: 16,
-    movetime: 1200,
+    blunderRate: 0,
+    movetime: 2000,
   },
   grandmaster: {
     id: 'grandmaster',
-    label: 'Grandmaster (~2500)',
-    description: 'Near elite limited-strength Stockfish.',
+    label: 'Grandmaster (2500)',
+    description: 'Stockfish limited to 2500 on its calibrated scale.',
     skillLevel: 20,
     limitStrength: true,
     elo: 2500,
-    depth: 18,
-    movetime: 1500,
+    blunderRate: 0,
+    movetime: 2000,
   },
   maximum: {
     id: 'maximum',
-    label: 'Maximum (full engine)',
-    description: 'Unrestricted Stockfish lite — ruthless.',
+    label: 'Maximum (full lite)',
+    description: 'No strength cap. Stockfish 18 lite thinks for up to 2 seconds.',
     skillLevel: 20,
     limitStrength: false,
     elo: null,
-    depth: 22,
+    blunderRate: 0,
     movetime: 2000,
   },
 };
+
+/**
+ * Stockfish 18 converts UCI_Elo to skill with the polynomial in search.h.
+ * Skill 0 is the 1320 floor. The top of the 3190 range lands just under 19.
+ */
+export function skillLevelForElo(elo) {
+  const clamped = Math.min(
+    STOCKFISH_ELO_MAX,
+    Math.max(STOCKFISH_ELO_MIN, Number(elo)),
+  );
+  const span = STOCKFISH_ELO_MAX - STOCKFISH_ELO_MIN;
+  const e = (clamped - STOCKFISH_ELO_MIN) / span;
+  const level = ((37.2473 * e - 40.8525) * e + 22.2943) * e - 0.311438;
+  return Math.min(19, Math.max(0, level));
+}
+
+/** Depth at which Stockfish commits the weakened root move. */
+export function pickDepthForElo(elo) {
+  return 1 + Math.floor(skillLevelForElo(elo));
+}
+
+/**
+ * Time ceiling for a pick-depth search on lite single-thread WASM.
+ * Extra depth would not strengthen a limited engine; this only needs to be
+ * long enough for the pick ply (MultiPV 4) to finish.
+ */
+export function movetimeForPickDepth(depth) {
+  const ply = Math.max(1, Number(depth) || 1);
+  return Math.min(4000, 400 + ply * 280);
+}
+
+/** Ordering key for the ladder. Higher is stronger. Not a measured Elo. */
+export function cpuStrengthKey(level) {
+  if (!level?.limitStrength) {
+    return 10000;
+  }
+  return level.elo - (level.blunderRate || 0) * 1000;
+}
+
+/** UCI go-command and the limits that keep a preset on its labeled strength. */
+export function resolveCpuSearch(levelOrId) {
+  const level = typeof levelOrId === 'string' || levelOrId == null
+    ? CPU_LEVELS[resolveCpuLevel(levelOrId)]
+    : levelOrId;
+  if (!level.limitStrength) {
+    const movetime = level.movetime;
+    return {
+      depth: null,
+      movetime,
+      blunderRate: 0,
+      elo: null,
+      go: `go movetime ${movetime}`,
+    };
+  }
+  const depth = pickDepthForElo(level.elo);
+  const movetime = movetimeForPickDepth(depth);
+  return {
+    depth,
+    movetime,
+    blunderRate: level.blunderRate || 0,
+    elo: level.elo,
+    go: `go depth ${depth} movetime ${movetime}`,
+  };
+}
 
 export const DEFAULT_CPU_LEVEL = 'intermediate';
 
@@ -319,6 +396,17 @@ export class StockfishCpu {
     await this._waitReady();
   }
 
+  /**
+   * Clear hash and history for a new game. Call once per match, not per move,
+   * so later searches match the way the Elo scale was measured.
+   */
+  async newGame() {
+    await this.ensureReady();
+    await this._stopSearch();
+    this.worker.postMessage('ucinewgame');
+    await this._waitReady();
+  }
+
   _onWorkerMessage(event) {
     const line = String(event.data ?? '');
     const best = parseBestMove(line);
@@ -430,14 +518,13 @@ export class StockfishCpu {
 
     await this._stopSearch();
 
-    const level = CPU_LEVELS[this.levelId];
+    const search = resolveCpuSearch(this.levelId);
     this._searching = true;
 
     return new Promise((resolve, reject) => {
       this.pending = { resolve, reject };
-      this.worker.postMessage('ucinewgame');
       this.worker.postMessage(`position fen ${fen}`);
-      this.worker.postMessage(`go depth ${level.depth} movetime ${level.movetime}`);
+      this.worker.postMessage(search.go);
     });
   }
 

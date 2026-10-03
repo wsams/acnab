@@ -1,4 +1,13 @@
-import { castlingRookMove, emptyGame, enPassantCaptureSquare, formatMovetext, moveNumberSignature, renderGame, sanFromUci } from './engine.js';
+import {
+  appendSanToMovetext,
+  castlingRookMove,
+  emptyGame,
+  enPassantCaptureSquare,
+  legalMovesFromSquare,
+  moveNumberSignature,
+  renderGame,
+  selectCpuMove,
+} from './engine.js';
 import {
   CLOCK_MODES,
   CLOCK_PRESETS,
@@ -14,6 +23,7 @@ import {
   normalizeHumanThinkSample,
   resolveCpuHandicap,
   resolveCpuLevel,
+  resolveCpuSearch,
   sleep,
   tossCoinForSides,
 } from './cpu.js';
@@ -46,11 +56,12 @@ const STORAGE_KEYS = {
   cpuLevel: 'acnab:cpu-level',
   cpuHandicap: 'acnab:cpu-handicap',
   replaySpeed: 'acnab:replay-speed',
+  clickMoves: 'acnab:click-moves',
 };
 
 const DEMO_MOVES = '1. e4 c5 2. Nf3 d6 3. d4 cxd4 4. Nxd4 b5 5. Bxb5+ Bd7 6. Nc3 f5 7. exf5 g6 8. Qf3 gxf5 9. Qh5#';
 
-const SLIDE_DURATION_MS = 620;
+const SLIDE_DURATION_MS = 420;
 const REPLAY_SPEEDS = new Set(['1400', '950', '600']);
 
 function resolveReplaySpeed(value) {
@@ -80,6 +91,14 @@ function readFlipped() {
   return localStorage.getItem(STORAGE_KEYS.flipped) === '1';
 }
 
+function readClickMoves() {
+  const saved = localStorage.getItem(STORAGE_KEYS.clickMoves);
+  if (saved == null || saved === '') {
+    return true;
+  }
+  return saved === '1' || saved === 'true' || saved === 'on';
+}
+
 function resolveClockPreset(id) {
   return CLOCK_PRESETS[id] ? id : '10|0';
 }
@@ -104,6 +123,14 @@ const state = {
   moveNumberPrimeTimer: null,
   shareTimer: null,
   animToken: 0,
+  animating: false,
+  clickMoves: readClickMoves(),
+  boardInput: {
+    from: null,
+    moves: [],
+    promotion: null,
+    fen: null,
+  },
   replay: {
     ply: null,
     playing: false,
@@ -185,6 +212,8 @@ const elements = {
   coin: document.querySelector('#coin'),
   coinCaption: document.querySelector('#coin-caption'),
   cpuStatus: document.querySelector('#cpu-status'),
+  clickMoves: document.querySelector('#click-moves'),
+  promotionPicker: document.querySelector('#promotion-picker'),
 };
 
 const clock = new ChessClock({
@@ -599,9 +628,22 @@ async function startCpuMatch({ announceEngine = true } = {}) {
 
   paintCpuUi();
   if (announceEngine) {
-    setFeedback(`${faceLabel} — you are ${humanName}. Enter moves in notation; Stockfish replies.`);
+    setFeedback(`${faceLabel} — you are ${humanName}. Type a move or click pieces; Stockfish replies.`);
   } else {
     setFeedback(`${faceLabel} — you are ${humanName}. Stockfish is ready.`);
+  }
+
+  try {
+    await stockfish.newGame();
+  } catch (error) {
+    if (!state.cpu.enabled) {
+      return;
+    }
+    setFeedback(error.message || 'CPU failed to start a new game.', true);
+    return;
+  }
+  if (!state.cpu.enabled) {
+    return;
   }
 
   // Start human think clock if they go first.
@@ -642,11 +684,11 @@ async function maybeRequestCpuMove(game) {
   state.cpu.thinking = true;
   state.cpu.lastThoughtFen = game.fen;
 
-  const level = CPU_LEVELS[state.cpu.levelId];
+  const search = resolveCpuSearch(state.cpu.levelId);
   const targetMs = cpuPaceTargetMs({
     handicap: state.cpu.handicap,
     samples: state.cpu.humanTurnDurations,
-    fallbackMs: level.movetime,
+    fallbackMs: search.movetime,
   });
   state.cpu.paceTargetMs = targetMs;
   paintCpuUi();
@@ -676,14 +718,11 @@ async function maybeRequestCpuMove(game) {
       }
     }
 
-    const san = sanFromUci(game.fen, uciMove);
-    const applied = [...game.appliedMoves, san];
-    // After White (CPU as first player), leave a trailing space so Black can type SAN.
+    const chosen = selectCpuMove(game.fen, uciMove, { blunderRate: search.blunderRate });
+    const san = chosen.san;
+    // After White, leave a trailing space so Black can type SAN.
     // After Black, leave clean movetext — next `N. ` priming adds the spaced prefix.
-    let nextMoves = formatMovetext(applied);
-    if (applied.length % 2 === 1) {
-      nextMoves = ensureTrailingSanSpace(nextMoves);
-    }
+    const nextMoves = appendSanToMovetext(game.appliedMoves, san);
     elements.moves.value = nextMoves;
     state.cpu.thinking = false;
     state.cpu.lastThoughtFen = null;
@@ -1030,14 +1069,20 @@ function createPieceFlyer(pieceEl, fromRect, className = 'piece-flyer') {
 function animateFlyerTo(flyer, fromRect, toRect, durationMs) {
   const dx = toRect.left - fromRect.left;
   const dy = toRect.top - fromRect.top;
+  const distance = Math.hypot(dx, dy);
+  const lift = Math.max(8, Math.min(22, distance * 0.12));
   const animation = flyer.animate(
     [
-      { transform: 'translate(0px, 0px)' },
-      { transform: `translate(${dx}px, ${dy}px)` },
+      { transform: 'translate3d(0px, 0px, 0) scale(1)', offset: 0 },
+      {
+        transform: `translate3d(${(dx * 0.46).toFixed(2)}px, ${(dy * 0.46 - lift).toFixed(2)}px, 0) scale(1.06)`,
+        offset: 0.46,
+      },
+      { transform: `translate3d(${dx.toFixed(2)}px, ${dy.toFixed(2)}px, 0) scale(1)`, offset: 1 },
     ],
     {
       duration: durationMs,
-      easing: 'cubic-bezier(0.22, 0.61, 0.36, 1)',
+      easing: 'cubic-bezier(0.16, 0.84, 0.28, 1)',
       fill: 'forwards',
     },
   );
@@ -1114,18 +1159,10 @@ function playCheckEffects(game, move) {
   pulseSquareClass(kingSquare, 'is-check', 900);
 }
 
-function revealAnimatedPieces(squares) {
-  squares.forEach((square) => {
-    const piece = squareNode(square)?.querySelector('.piece');
-    if (piece) {
-      piece.classList.remove('is-hidden-for-anim');
-    }
-  });
-}
-
 function renderBoard(game, { hidePieces = null, animating = false, settle = false } = {}) {
   const hidden = hidePieces instanceof Set ? hidePieces : new Set(hidePieces ?? []);
   const squares = [];
+  const lastMove = game.history?.[game.history.length - 1] ?? null;
   const files = state.flipped
     ? ['H', 'G', 'F', 'E', 'D', 'C', 'B', 'A']
     : ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
@@ -1150,9 +1187,12 @@ function renderBoard(game, { hidePieces = null, animating = false, settle = fals
         ? `${piece.color} ${piece.name} on ${square.square}`
         : `empty ${square.square}`;
       const pieceClass = piece ? ` has-piece ${piece.color}` : '';
+      const lastClass = lastMove && (square.square === lastMove.from || square.square === lastMove.to)
+        ? ' is-last-move'
+        : '';
       squares.push(`
         <div
-          class="board-square board-cell ${square.isLight ? 'light' : 'dark'}${pieceClass}"
+          class="board-square board-cell ${square.isLight ? 'light' : 'dark'}${pieceClass}${lastClass}"
           data-square="${escapeHtml(square.square)}"
           aria-label="${escapeHtml(label)}"
         >
@@ -1172,6 +1212,21 @@ function renderBoard(game, { hidePieces = null, animating = false, settle = fals
     void elements.board.offsetWidth;
     elements.board.classList.add('is-settling');
   }
+  syncLiftAfterRender(game);
+}
+
+function flyerStartRect(pieceEl, squareEl) {
+  const slot = pieceSlotRect(squareEl);
+  const visual = pieceEl.getBoundingClientRect();
+  if (visual.width <= 0 || visual.height <= 0) {
+    return slot;
+  }
+  return {
+    left: visual.left + ((visual.width - slot.width) / 2),
+    top: visual.top + ((visual.height - slot.height) / 2),
+    width: slot.width,
+    height: slot.height,
+  };
 }
 
 async function animateBoardMove(move, nextGame) {
@@ -1197,21 +1252,20 @@ async function animateBoardMove(move, nextGame) {
 
   const token = state.animToken + 1;
   state.animToken = token;
+  state.animating = true;
   clearPieceFlyers();
   clearBoardEffects();
 
-  const fromRect = pieceSlotRect(fromSquare);
+  const fromRect = flyerStartRect(movingPiece, fromSquare);
   const toRect = pieceSlotRect(toSquare);
   const flyer = createPieceFlyer(movingPiece, fromRect);
   movingPiece.classList.add('is-hidden-for-anim');
 
   const captureSquare = move.isEnPassant ? enPassantCaptureSquare(move) : (move.isCapture ? move.to : null);
   let victimPromise = Promise.resolve();
-  let capturedPiece = null;
-  let captureEl = null;
   if (captureSquare) {
-    captureEl = squareNode(captureSquare);
-    capturedPiece = captureEl?.querySelector('.piece');
+    const captureEl = squareNode(captureSquare);
+    const capturedPiece = captureEl?.querySelector('.piece');
     if (capturedPiece) {
       const victimRect = pieceSlotRect(captureEl);
       const victim = createPieceFlyer(capturedPiece, victimRect, 'piece-victim');
@@ -1229,19 +1283,12 @@ async function animateBoardMove(move, nextGame) {
     const rookTo = squareNode(rookMove.to);
     const rookPiece = rookFrom?.querySelector('.piece');
     if (rookFrom && rookTo && rookPiece) {
-      rookFromRect = pieceSlotRect(rookFrom);
+      rookFromRect = flyerStartRect(rookPiece, rookFrom);
       rookToRect = pieceSlotRect(rookTo);
       rookFlyer = createPieceFlyer(rookPiece, rookFromRect);
       rookPiece.classList.add('is-hidden-for-anim');
     }
   }
-
-  const hidePieces = new Set([move.to]);
-  if (rookMove) {
-    hidePieces.add(rookMove.to);
-  }
-  // Single rebuild during the slide; destination pieces stay hidden until landing.
-  renderBoard(nextGame, { hidePieces, animating: true, settle: false });
 
   if (move.isCapture || move.isEnPassant) {
     playCaptureBurst(move.to);
@@ -1250,35 +1297,43 @@ async function animateBoardMove(move, nextGame) {
     }
   }
 
-  const nextTo = squareNode(move.to);
-  const finalToRect = nextTo ? pieceSlotRect(nextTo) : toRect;
+  elements.board.classList.add('is-animating');
+  let promotionTimer = null;
+  if (move.promotion) {
+    const color = move.color === 'black' ? 'black' : 'white';
+    promotionTimer = window.setTimeout(() => {
+      if (!flyer.isConnected) {
+        return;
+      }
+      flyer.innerHTML = renderPieceSvg(move.promotion, color, state.pieceSet, state.piecePalette);
+    }, Math.round(SLIDE_DURATION_MS * 0.55));
+  }
+
   const animations = [
-    animateFlyerTo(flyer, fromRect, finalToRect, SLIDE_DURATION_MS),
+    animateFlyerTo(flyer, fromRect, toRect, SLIDE_DURATION_MS),
     victimPromise,
   ];
-  if (rookFlyer && rookFromRect && rookMove) {
-    const nextRookTo = squareNode(rookMove.to);
-    const finalRookRect = nextRookTo ? pieceSlotRect(nextRookTo) : rookToRect;
-    animations.push(animateFlyerTo(rookFlyer, rookFromRect, finalRookRect, SLIDE_DURATION_MS));
+  if (rookFlyer && rookFromRect && rookToRect) {
+    animations.push(animateFlyerTo(rookFlyer, rookFromRect, rookToRect, SLIDE_DURATION_MS));
   }
 
-  await Promise.all(animations);
-  flyer.remove();
-  rookFlyer?.remove();
-
-  if (token !== state.animToken) {
-    return;
+  try {
+    await Promise.all(animations);
+  } finally {
+    window.clearTimeout(promotionTimer);
+    if (token === state.animToken) {
+      state.animating = false;
+      // Rebuild and drop the flyer in one turn so the landing piece does not flash.
+      renderBoard(nextGame, { settle: false });
+      flyer.remove();
+      rookFlyer?.remove();
+      playLandingSplash(move.to);
+      playCheckEffects(nextGame, move);
+    } else {
+      flyer.remove();
+      rookFlyer?.remove();
+    }
   }
-
-  // Reveal landed pieces in place — do not rebuild the board (avoids settle jitter).
-  revealAnimatedPieces(hidePieces);
-  elements.board.classList.remove('is-animating');
-  squareNode(move.to)?.classList.remove('is-capture-burst');
-  if (captureSquare && captureSquare !== move.to) {
-    squareNode(captureSquare)?.classList.remove('is-capture-burst');
-  }
-  playLandingSplash(move.to);
-  playCheckEffects(nextGame, move);
 }
 
 function stopReplayPlayback({ finished = false } = {}) {
@@ -1404,15 +1459,6 @@ function hasTrailingMoveNumber(text, moveNumber) {
   return new RegExp(`(?:^|\\s)${moveNumber}\\.\\s+$`).test(String(text ?? ''));
 }
 
-/** Ensure movetext ends with a single space so the next SAN can be typed immediately. */
-function ensureTrailingSanSpace(text) {
-  const value = String(text ?? '');
-  if (!value) {
-    return value;
-  }
-  return /\s$/.test(value) ? value : `${value} `;
-}
-
 /** Build `… N. ` with a guaranteed space after the period. */
 function withNextMoveNumberPrefix(text, nextNumber) {
   let base = String(text ?? '').replace(/\s+$/, '');
@@ -1502,6 +1548,7 @@ async function updateBoard(moves, announce = true, {
   fromReplay = false,
   animateMove = null,
   replayGeneration = null,
+  statusNote = '',
 } = {}) {
   state.draft = moves;
   localStorage.setItem(STORAGE_KEYS.draft, moves);
@@ -1558,7 +1605,9 @@ async function updateBoard(moves, announce = true, {
     });
     queueShareHash(fullGame.normalizedInput || moves);
 
-    if (announce) {
+    if (statusNote) {
+      setFeedback(statusNote);
+    } else if (announce) {
       setFeedback('Board updated.');
     } else if (!state.cpu.enabled && !fromReplay) {
       elements.feedback.textContent = '';
@@ -1867,6 +1916,213 @@ function syncBoardExtrasDisclosure() {
   extras.open = !window.matchMedia('(max-width: 800px)').matches;
 }
 
+function pieceOnSquare(game, square) {
+  for (const row of game?.board ?? []) {
+    for (const cell of row) {
+      if (cell.square === square) {
+        return cell.piece;
+      }
+    }
+  }
+  return null;
+}
+
+function clearLift() {
+  state.boardInput.from = null;
+  state.boardInput.moves = [];
+  state.boardInput.promotion = null;
+  state.boardInput.fen = null;
+  elements.board?.querySelectorAll('.is-lifted, .is-move-target, .is-capture-target').forEach((node) => {
+    node.classList.remove('is-lifted', 'is-move-target', 'is-capture-target');
+  });
+  hidePromotionPicker();
+}
+
+function hidePromotionPicker() {
+  if (!elements.promotionPicker) {
+    return;
+  }
+  elements.promotionPicker.hidden = true;
+  elements.promotionPicker.innerHTML = '';
+}
+
+function paintClickMode() {
+  elements.board?.classList.toggle('is-click-mode', state.clickMoves);
+  if (!elements.clickMoves) {
+    return;
+  }
+  elements.clickMoves.setAttribute('aria-pressed', state.clickMoves ? 'true' : 'false');
+  elements.clickMoves.title = state.clickMoves
+    ? 'On: click a piece to lift it, then click a square to place it. Notation fills in as you move.'
+    : 'Off: type notation only. Turn on to lift and place pieces.';
+}
+
+function paintBoardSelection() {
+  elements.board?.classList.toggle('is-click-mode', state.clickMoves);
+  elements.board?.querySelectorAll('.is-lifted, .is-move-target, .is-capture-target').forEach((node) => {
+    node.classList.remove('is-lifted', 'is-move-target', 'is-capture-target');
+  });
+  const from = state.boardInput.from;
+  if (!from) {
+    hidePromotionPicker();
+    return;
+  }
+  squareNode(from)?.classList.add('is-lifted');
+  const seen = new Set();
+  state.boardInput.moves.forEach((move) => {
+    if (seen.has(move.to)) {
+      return;
+    }
+    seen.add(move.to);
+    squareNode(move.to)?.classList.add(move.captured ? 'is-capture-target' : 'is-move-target');
+  });
+  paintPromotionPicker();
+}
+
+function syncLiftAfterRender(game) {
+  elements.board?.classList.toggle('is-click-mode', state.clickMoves);
+  if (!state.boardInput.from) {
+    hidePromotionPicker();
+    return;
+  }
+  if (!state.clickMoves || state.boardInput.fen !== game?.fen) {
+    clearLift();
+    return;
+  }
+  paintBoardSelection();
+}
+
+function paintPromotionPicker() {
+  const picker = elements.promotionPicker;
+  const pending = state.boardInput.promotion;
+  if (!picker || !pending) {
+    hidePromotionPicker();
+    return;
+  }
+  const color = state.game?.turn === 'black' ? 'black' : 'white';
+  const labels = { q: 'Queen', r: 'Rook', b: 'Bishop', n: 'Knight' };
+  const types = [];
+  pending.options.forEach((option) => {
+    if (option.promotion && !types.includes(option.promotion)) {
+      types.push(option.promotion);
+    }
+  });
+  const order = ['q', 'r', 'b', 'n'];
+  types.sort((a, b) => order.indexOf(a) - order.indexOf(b));
+  picker.hidden = false;
+  picker.innerHTML = types.map((type) => `
+    <button type="button" class="promotion-choice" data-promotion="${type}" aria-label="Promote to ${labels[type] || type}">
+      ${renderPieceSvg(type, color, state.pieceSet, state.piecePalette)}
+    </button>
+  `).join('');
+}
+
+function setClickMoves(enabled) {
+  state.clickMoves = Boolean(enabled);
+  localStorage.setItem(STORAGE_KEYS.clickMoves, state.clickMoves ? '1' : '0');
+  if (!state.clickMoves) {
+    clearLift();
+  }
+  paintClickMode();
+}
+
+async function commitBoardMove(game, move) {
+  // Leave the lifted piece in place so the glide starts from the raised position.
+  // The new position's render drops the selection because the FEN changed.
+  hidePromotionPicker();
+  state.boardInput.promotion = null;
+  const nextMoves = appendSanToMovetext(game.appliedMoves, move.san);
+  elements.moves.value = nextMoves;
+  const caret = nextMoves.length;
+  elements.moves.setSelectionRange(caret, caret);
+  await updateBoard(nextMoves, false, { statusNote: move.san });
+}
+
+async function choosePromotion(type) {
+  const pending = state.boardInput.promotion;
+  if (!pending) {
+    return;
+  }
+  const move = pending.options.find((option) => option.promotion === type) || pending.options[0];
+  let game;
+  try {
+    game = renderGame(elements.moves.value);
+  } catch (error) {
+    clearLift();
+    setFeedback(error.message, true);
+    return;
+  }
+  await commitBoardMove(game, move);
+}
+
+async function placeOrLift(square) {
+  if (!state.clickMoves || state.animating || state.cpu.thinking || state.cpu.tossing) {
+    return;
+  }
+  if (!isViewingLive()) {
+    setFeedback('Return to the latest move before playing on the board.', true);
+    return;
+  }
+
+  clearTimeout(state.requestTimer);
+  let game;
+  try {
+    game = renderGame(elements.moves.value);
+  } catch {
+    setFeedback('Fix the notation before moving on the board.', true);
+    return;
+  }
+  if (game.fen !== state.game?.fen) {
+    await updateBoard(elements.moves.value, false, { skipCpu: true, statusNote: 'Board matched the notation. Click a piece to move.' });
+    return;
+  }
+  if (game.isGameOver) {
+    setFeedback(game.status, true);
+    return;
+  }
+  if (state.cpu.enabled && state.cpu.humanSide && game.turn !== state.cpu.humanSide) {
+    setFeedback('The CPU is to move.', true);
+    return;
+  }
+
+  const lifted = state.boardInput.from;
+  if (lifted && state.boardInput.fen === game.fen) {
+    const options = state.boardInput.moves.filter((move) => move.to === square);
+    if (options.length > 1) {
+      state.boardInput.promotion = { to: square, options };
+      paintPromotionPicker();
+      return;
+    }
+    if (options.length === 1) {
+      await commitBoardMove(game, options[0]);
+      return;
+    }
+    if (square === lifted) {
+      clearLift();
+      return;
+    }
+  }
+
+  const piece = pieceOnSquare(game, square);
+  if (!piece || piece.color !== game.turn) {
+    if (lifted) {
+      clearLift();
+    }
+    return;
+  }
+  const moves = legalMovesFromSquare(game.fen, square);
+  if (!moves.length) {
+    clearLift();
+    setFeedback('That piece has no legal move.', true);
+    return;
+  }
+  state.boardInput.from = square;
+  state.boardInput.moves = moves;
+  state.boardInput.promotion = null;
+  state.boardInput.fen = game.fen;
+  paintBoardSelection();
+}
+
 function bindEvents() {
   elements.renderForm.addEventListener('submit', (event) => {
     event.preventDefault();
@@ -1895,6 +2151,33 @@ function bindEvents() {
   elements.clockReset.addEventListener('click', resetClock);
   elements.newGame.addEventListener('click', resetBoard);
   elements.flipBoard?.addEventListener('click', () => setBoardFlipped(!state.flipped));
+  elements.clickMoves?.addEventListener('click', () => setClickMoves(!state.clickMoves));
+  elements.board?.addEventListener('click', (event) => {
+    const squareEl = event.target.closest('[data-square]');
+    if (!(squareEl instanceof HTMLElement) || !squareEl.dataset.square) {
+      return;
+    }
+    placeOrLift(squareEl.dataset.square);
+  });
+  elements.board?.addEventListener('contextmenu', (event) => {
+    if (!state.clickMoves || !state.boardInput.from) {
+      return;
+    }
+    event.preventDefault();
+    clearLift();
+  });
+  elements.promotionPicker?.addEventListener('click', (event) => {
+    const choice = event.target.closest('[data-promotion]');
+    if (!(choice instanceof HTMLElement) || !choice.dataset.promotion) {
+      return;
+    }
+    choosePromotion(choice.dataset.promotion);
+  });
+  window.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && state.boardInput.from) {
+      clearLift();
+    }
+  });
   elements.copyPgn.addEventListener('click', copyNotation);
   elements.shareLink?.addEventListener('click', copyShareLink);
   elements.loadDemo?.addEventListener('click', loadDemo);
@@ -2009,6 +2292,7 @@ function bootstrap() {
   }
 
   syncFlipButton();
+  paintClickMode();
   syncBoardExtrasDisclosure();
   paintClock();
   paintGame(state.game, { skipCpu: true });
