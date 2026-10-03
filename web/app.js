@@ -160,6 +160,8 @@ const stockfish = new StockfishCpu();
 
 const elements = {
   board: document.querySelector('#board'),
+  boardFrame: document.querySelector('#board-frame'),
+  boardSeal: document.querySelector('#board-seal'),
   moves: document.querySelector('#moves'),
   movesList: document.querySelector('#moves-list'),
   status: document.querySelector('#status'),
@@ -765,7 +767,9 @@ function paintClockFace(face, timeEl, labelEl, side, snapshot, names) {
   face.style.setProperty('--clock-stroke', palette.stroke);
   face.classList.toggle('is-light-side', isLightSide);
   face.classList.toggle('is-dark-side', !isLightSide);
+  const toMove = state.game?.isGameOver ? null : state.game?.turn;
   face.classList.toggle('is-active', snapshot.active === side && snapshot.running);
+  face.classList.toggle('is-to-move', toMove === side);
   face.classList.toggle('is-flagged', snapshot.flagged === side);
   face.classList.toggle('is-low', snapshot.times[side] <= 30_000);
 }
@@ -1163,10 +1167,129 @@ function playCheckEffects(game, move) {
   pulseSquareClass(kingSquare, 'is-check', 900);
 }
 
+function describeSituation(game) {
+  const toMoveSide = game?.turn === 'black' ? 'black' : 'white';
+  const toMove = sideLabel(toMoveSide);
+  const winnerSide = toMoveSide === 'white' ? 'black' : 'white';
+  const winner = sideLabel(winnerSide);
+  const whiteAtBottom = !state.flipped;
+  const matedEdge = (toMoveSide === 'white') === whiteAtBottom ? 'bottom' : 'top';
+  const edge = game?.isGameOver && !game?.isCheckmate ? 'none' : matedEdge;
+
+  if (game?.isCheckmate) {
+    return {
+      tone: 'checkmate',
+      side: winnerSide,
+      edge,
+      banner: `Checkmate · ${winner} wins`,
+      sealKicker: 'Checkmate',
+      sealResult: `${winner} wins`,
+    };
+  }
+  if (game?.isGameOver) {
+    const raw = String(game.status || 'Draw').replace(/\.$/, '');
+    const stalemate = /^stalemate/i.test(raw);
+    return {
+      tone: 'draw',
+      side: toMoveSide,
+      edge,
+      banner: raw,
+      sealKicker: stalemate ? 'Stalemate' : 'Draw',
+      sealResult: stalemate ? 'Draw' : raw.replace(/^Draw by /i, ''),
+    };
+  }
+  if (game?.isCheck) {
+    return {
+      tone: 'check',
+      side: toMoveSide,
+      edge,
+      banner: `Check · ${toMove} to move`,
+      sealKicker: '',
+      sealResult: '',
+    };
+  }
+  return {
+    tone: 'turn',
+    side: toMoveSide,
+    edge,
+    banner: `${toMove} to move`,
+    sealKicker: '',
+    sealResult: '',
+  };
+}
+
+function paintBoardBanner(game) {
+  const banner = elements.status;
+  const frame = elements.boardFrame;
+  const seal = elements.boardSeal;
+  if (!banner || !frame || !game) {
+    return;
+  }
+
+  const situation = describeSituation(game);
+  const palette = getPaletteSide(state.piecePalette, situation.side);
+  frame.dataset.situation = situation.tone;
+  frame.dataset.turn = situation.side;
+  frame.dataset.turnEdge = situation.edge;
+  frame.style.setProperty('--turn-fill', palette.fill);
+  frame.style.setProperty('--turn-stroke', palette.stroke);
+  paintClock();
+
+  const signature = `${situation.tone}|${situation.banner}|${situation.side}|${state.piecePalette}`;
+  if (banner.dataset.signature === signature) {
+    return;
+  }
+  banner.dataset.signature = signature;
+  banner.dataset.tone = situation.tone;
+
+  const pip = document.createElement('span');
+  pip.className = 'board-banner-pip';
+  pip.setAttribute('aria-hidden', 'true');
+  const text = document.createElement('span');
+  text.className = 'board-banner-text';
+  text.textContent = situation.banner;
+  banner.replaceChildren(pip, text);
+
+  const announce = situation.tone === 'check' || situation.tone === 'checkmate' || situation.tone === 'draw';
+  banner.classList.remove('is-announcing');
+  seal?.classList.remove('is-announcing');
+  if (announce && !prefersReducedMotion()) {
+    void banner.offsetWidth;
+    banner.classList.add('is-announcing');
+  }
+
+  if (!seal) {
+    return;
+  }
+  const showSeal = situation.tone === 'checkmate' || situation.tone === 'draw';
+  seal.hidden = !showSeal;
+  seal.dataset.tone = situation.tone;
+  seal.dataset.signature = signature;
+  seal.replaceChildren();
+  if (!showSeal) {
+    return;
+  }
+  const kicker = document.createElement('span');
+  kicker.className = 'board-seal-kicker';
+  kicker.textContent = situation.sealKicker;
+  seal.append(kicker);
+  if (situation.sealResult) {
+    const result = document.createElement('span');
+    result.className = 'board-seal-result';
+    result.textContent = situation.sealResult;
+    seal.append(result);
+  }
+  if (announce && !prefersReducedMotion()) {
+    void seal.offsetWidth;
+    seal.classList.add('is-announcing');
+  }
+}
+
 function renderBoard(game, { hidePieces = null, animating = false, settle = false } = {}) {
   const hidden = hidePieces instanceof Set ? hidePieces : new Set(hidePieces ?? []);
   const squares = [];
   const lastMove = game.history?.[game.history.length - 1] ?? null;
+  const checkedKing = (game?.isCheck || game?.isCheckmate) ? findKingSquare(game, game.turn) : null;
   const files = state.flipped
     ? ['H', 'G', 'F', 'E', 'D', 'C', 'B', 'A']
     : ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
@@ -1187,20 +1310,31 @@ function renderBoard(game, { hidePieces = null, animating = false, settle = fals
       const pieceMarkup = piece
         ? `<span class="piece ${piece.color}${hidePiece ? ' is-hidden-for-anim' : ''}" aria-hidden="true">${renderPieceSvg(piece.type, piece.color, state.pieceSet, state.piecePalette)}</span>`
         : '';
-      const label = piece
+      let label = piece
         ? `${piece.color} ${piece.name} on ${square.square}`
         : `empty ${square.square}`;
+      const isCheckedKing = checkedKing === square.square;
+      if (isCheckedKing) {
+        label += game.isCheckmate ? ', checkmated' : ', in check';
+      }
       const pieceClass = piece ? ` has-piece ${piece.color}` : '';
       const lastClass = lastMove && (square.square === lastMove.from || square.square === lastMove.to)
         ? ' is-last-move'
         : '';
+      const alertClass = isCheckedKing
+        ? (game.isCheckmate ? ' is-in-checkmate' : ' is-in-check')
+        : '';
+      const alertBadge = isCheckedKing
+        ? `<span class="king-alert" aria-hidden="true">${game.isCheckmate ? '#' : '+'}</span>`
+        : '';
       squares.push(`
         <div
-          class="board-square board-cell ${square.isLight ? 'light' : 'dark'}${pieceClass}${lastClass}"
+          class="board-square board-cell ${square.isLight ? 'light' : 'dark'}${pieceClass}${lastClass}${alertClass}"
           data-square="${escapeHtml(square.square)}"
           aria-label="${escapeHtml(label)}"
         >
           ${pieceMarkup}
+          ${alertBadge}
           <span class="coordinate">${escapeHtml(square.square)}</span>
         </div>
       `);
@@ -1217,6 +1351,7 @@ function renderBoard(game, { hidePieces = null, animating = false, settle = fals
     elements.board.classList.add('is-settling');
   }
   syncLiftAfterRender(game);
+  paintBoardBanner(game);
 }
 
 function flyerStartRect(pieceEl, squareEl) {
@@ -1414,7 +1549,7 @@ function renderMoves(game, fullGame = state.fullGame) {
 }
 
 function renderStatus(game) {
-  elements.status.textContent = game.status;
+  paintBoardBanner(game);
   elements.fen.textContent = game.fen;
   elements.moveCount.textContent = String(state.fullGame?.moveCount ?? game.moveCount);
 }
