@@ -52,6 +52,15 @@
         <div id="status" class="status-card"></div>
         <div class="board-actions">
           <button id="flip-board" type="button" class="button ghost" aria-pressed="false">Flip board</button>
+          <button
+            id="click-moves"
+            type="button"
+            class="button ghost"
+            aria-pressed="true"
+            title="Click a piece to lift it, then click a square to place it. Notation fills in as you move."
+          >
+            Click to move
+          </button>
           <button id="new-game" type="button" class="button ghost">New board</button>
         </div>
       </div>
@@ -86,7 +95,10 @@
 
       <div class="board-layout">
         <aside class="captures captures-black" id="captures-black" aria-label="Pieces captured by black"></aside>
-        <div id="board" class="board" aria-live="polite"></div>
+        <div class="board-frame">
+          <div id="board" class="board" aria-live="polite"></div>
+          <div id="promotion-picker" class="promotion-picker" hidden></div>
+        </div>
         <aside class="captures captures-white" id="captures-white" aria-label="Pieces captured by white"></aside>
       </div>
     </section>
@@ -267,8 +279,9 @@
           <li><strong>Live</strong> clock: follows each completed move and keeps running while you type.</li>
           <li>Flip the board for couch co-op without turning the device.</li>
           <li><strong>Share</strong> copies a link with the current notation encoded in the URL hash. Opening that link loads the game from the start and autoplays to the end.</li>
-          <li><strong>Play controls</strong> under the board step through or autoplay the game; pieces slide into place (also during live notation updates).</li>
-          <li><strong>CPU player</strong> (off by default): toss a coin for White, then enter your moves in notation — Stockfish replies automatically. Strength uses Stockfish skill / Elo limits from beginner through full engine. <strong>Pace</strong> (on by default) makes the CPU take about your average think time so the clocks stay even; turn it off for instant replies at the chosen strength.</li>
+          <li><strong>Click to move</strong> (on by default): click a piece to lift it, then click a highlighted square to place it. The moves box fills in the SAN, including the move number, as each piece lands. Press Escape or click the piece again to put it down. Promotion asks for a piece. Turn the button off to type notation only.</li>
+          <li><strong>Play controls</strong> under the board step through or autoplay the game; pieces glide into place (also during live notation updates).</li>
+          <li><strong>CPU player</strong> (off by default): toss a coin for White, then type or click your moves — Stockfish replies automatically. Strength from Intermediate upward is Stockfish’s own UCI Elo (1320–2500). Beginner and Casual are approximate: they play the 1320 engine and replace some moves with a random legal move, because Stockfish cannot aim below 1320. Maximum is uncapped lite Stockfish. <strong>Pace</strong> (on by default) makes the CPU take about your average think time so the clocks stay even; turn it off to reply as soon as the search finishes.</li>
         </ul>
       </details>
     </section>
