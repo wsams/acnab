@@ -1819,27 +1819,63 @@ textarea {
     display: none;
   }
 
+  body.is-editing-moves .clock-panel,
+  body.is-editing-moves .captures {
+    display: none;
+  }
+
+  /* Pin the board and the moves field to the visible area above the keyboard.
+     --vv-height / --editing-board are set from visualViewport while typing. */
   body.is-editing-moves .play-stage {
+    position: fixed;
+    z-index: 40;
+    top: var(--vv-offset, 0px);
+    left: 0;
+    right: 0;
+    height: var(--vv-height, 100dvh);
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
     gap: 0;
+    margin: 0;
+    padding: max(0.2rem, env(safe-area-inset-top)) 0.35rem 0.2rem;
+    overflow: hidden;
+    background: transparent;
   }
 
   body.is-editing-moves .panel-board {
-    padding: 0.55rem 0.55rem 0.35rem;
-    gap: 0.35rem;
+    flex: 0 1 auto;
+    min-height: 0;
+    padding: 0.35rem 0.3rem 0.15rem;
+    gap: 0.28rem;
+    overflow: hidden;
+  }
+
+  body.is-editing-moves .board-layout {
+    flex: 0 0 auto;
+    min-height: 0;
   }
 
   body.is-editing-moves .board {
-    width: min(100%, 56vw);
-    max-width: 18rem;
+    width: min(100%, var(--editing-board, 70dvh));
+    max-width: none;
+    margin-inline: auto;
   }
 
   body.is-editing-moves .panel-notation {
-    padding-top: 0.35rem;
+    flex: 0 0 auto;
+    padding-top: 0.3rem;
+    padding-bottom: 0.35rem;
   }
 
   body.is-editing-moves textarea {
-    min-height: 5.5rem;
-    max-height: 12rem;
+    min-height: 3.2rem;
+    max-height: 5.2rem;
+  }
+
+  body.is-editing-moves .panel-notation .actions,
+  body.is-editing-moves .panel-notation .feedback:not(.is-error) {
+    display: none;
   }
 }
 
@@ -1975,14 +2011,6 @@ textarea {
     display: none;
   }
 
-  body.is-editing-moves .clock-panel {
-    display: none;
-  }
-
-  body.is-editing-moves .board {
-    width: min(100%, 66vw);
-    max-width: none;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
