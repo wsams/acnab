@@ -8,7 +8,7 @@
 
 ![acnab web UI — Midnight theme with Blush & Magenta pieces, dual clocks, live notation, and local saves](docs/web-ui.png)
 
-The browser UI shows the live board beside a Moves panel: type SAN/PGN, hit **Render**, and the position updates with FEN, material, and move history. Dual clocks, theme/piece-color presets, and browser-local saves sit alongside the board for over-the-board notation tracking. Turn on **CPU player** to face Stockfish at a chosen strength — input stays chess notation.
+The browser UI shows the live board beside a Moves panel: type SAN/PGN, hit **Render**, and the position updates with FEN, material, and move history. Dual clocks, theme/piece-color presets, and browser-local saves sit alongside the board for over-the-board notation tracking. Turn on **CPU player** to face Stockfish at a chosen strength. Type SAN, or use **Click to move**: click a piece to lift it, click a square to place it, and the notation fills in with the move.
 
 ## CLI usage
 
@@ -57,8 +57,9 @@ GitHub Pages publishes the static UI from `web/` (the site root redirects there)
 - theme, SVG piece-set, and piece-color switching plus FEN/status summaries
 - flip board for couch co-op
 - shareable board links (notation encoded in the URL hash; opening a link resets to the start and autoplays)
-- play controls to step through or autoplay a game with sliding piece animation
-- optional CPU opponent (Stockfish.js 18 WASM, skill/Elo presets) — off by default; coin toss for who plays White
+- play controls to step through or autoplay a game with a gliding piece animation
+- click to lift a piece and click to place it; the moves box fills in SAN as each move lands
+- optional CPU opponent (Stockfish.js 18 lite WASM) — off by default; coin toss for who plays White. Limited levels use Stockfish’s UCI Elo scale (1320–2500). Beginner and Casual are approximate mixes below that floor.
 - no CDN runtime dependency for the chess engine (Stockfish is vendored under `web/vendor/stockfish/`, GPLv3)
 
 Example shared game (opens at move 1 and plays through to mate):

@@ -697,7 +697,8 @@ textarea {
   transition: transform 0.16s ease, background 0.16s ease, color 0.16s ease;
 }
 
-.button[aria-pressed='true'] {
+.button[aria-pressed='true'],
+.button.ghost[aria-pressed='true'] {
   background: color-mix(in srgb, var(--accent) 28%, transparent);
   color: var(--text);
 }
@@ -745,6 +746,13 @@ textarea {
   color: var(--muted);
 }
 
+.board-frame {
+  position: relative;
+  width: 100%;
+  max-width: 28rem;
+  margin: 0 auto;
+}
+
 .board {
   --piece-slot: 0.84;
   display: grid;
@@ -752,11 +760,54 @@ textarea {
   gap: 0;
   align-self: stretch;
   width: 100%;
-  max-width: 28rem;
-  margin: 0 auto;
+  max-width: none;
+  margin: 0;
   border-radius: 0.75rem;
   overflow: hidden;
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
+  touch-action: manipulation;
+}
+
+.promotion-picker {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 5;
+  display: flex;
+  gap: 0.4rem;
+  transform: translate(-50%, -50%);
+  padding: 0.45rem;
+  border-radius: 0.9rem;
+  background: color-mix(in srgb, var(--panel, #1b1612) 92%, #000);
+  border: 1px solid var(--border);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.35);
+}
+
+.promotion-picker[hidden] {
+  display: none;
+}
+
+.promotion-choice {
+  width: 3.1rem;
+  height: 3.1rem;
+  display: grid;
+  place-items: center;
+  padding: 0.25rem;
+  border: 0;
+  border-radius: 0.7rem;
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+}
+
+.promotion-choice:hover,
+.promotion-choice:focus-visible {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+  outline: none;
+}
+
+.promotion-choice .piece-svg {
+  width: 100%;
+  height: 100%;
 }
 
 .board-layout {
@@ -1180,6 +1231,57 @@ textarea {
   height: calc(var(--piece-slot, 0.84) * 100%);
   line-height: 0;
   filter: drop-shadow(0 2px 1px rgba(0, 0, 0, 0.22));
+  transition: transform 0.18s cubic-bezier(0.16, 0.84, 0.28, 1), filter 0.18s ease;
+}
+
+.board-square.is-last-move.light {
+  background: color-mix(in srgb, var(--accent) 30%, var(--board-light));
+}
+
+.board-square.is-last-move.dark {
+  background: color-mix(in srgb, var(--accent) 38%, var(--board-dark));
+}
+
+.board.is-click-mode .board-square.has-piece,
+.board.is-click-mode .board-square.is-move-target,
+.board.is-click-mode .board-square.is-capture-target {
+  cursor: pointer;
+}
+
+.board-square.is-lifted {
+  z-index: 2;
+}
+
+.board-square.is-lifted .piece {
+  position: relative;
+  z-index: 4;
+  transform: translateY(-12%) scale(1.07);
+  filter: drop-shadow(0 12px 8px rgba(0, 0, 0, 0.42));
+}
+
+.board-square.is-move-target::after,
+.board-square.is-capture-target::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.board-square.is-move-target::after {
+  width: 27%;
+  height: 27%;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent-strong) 78%, #111);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+.board-square.is-capture-target::after {
+  inset: 7%;
+  width: auto;
+  height: auto;
+  border-radius: 50%;
+  border: 3px solid color-mix(in srgb, var(--accent-strong) 82%, #111);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, #fff 35%, transparent);
 }
 
 .board-square .piece.white {
@@ -1734,7 +1836,7 @@ textarea {
     order: 2;
   }
 
-  .board-layout .board {
+  .board-layout .board-frame {
     order: 3;
   }
 
@@ -1750,11 +1852,11 @@ textarea {
   }
 
   /* Width follows the card. 72vw left a wide empty margin on phones;
-     dvh only caps the square when the screen is short (landscape). */
-  .board {
+     dvh only caps the square when the screen is short (landscape).
+     The frame, not the inner grid, owns the width so the promotion picker stays over the board. */
+  .board-frame {
     width: min(100%, 74dvh);
     max-width: 34rem;
-    margin-inline: auto;
   }
 
   .board-extras {
@@ -1856,7 +1958,7 @@ textarea {
     min-height: 0;
   }
 
-  body.is-editing-moves .board {
+  body.is-editing-moves .board-frame {
     width: min(100%, var(--editing-board, 70dvh));
     max-width: none;
     margin-inline: auto;
