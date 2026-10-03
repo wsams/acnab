@@ -999,6 +999,7 @@ function setBoardFlipped(flipped) {
 function setFeedback(message, isError = false) {
   elements.feedback.textContent = message;
   elements.feedback.classList.toggle('is-error', isError);
+  scheduleKeyboardFit();
 }
 
 function prefersReducedMotion() {
@@ -1044,7 +1045,10 @@ function findKingSquare(game, color) {
 
 function pieceSlotRect(squareEl) {
   const rect = squareEl.getBoundingClientRect();
-  const size = Math.min(rect.width, rect.height) * 0.84;
+  const raw = getComputedStyle(elements.board).getPropertyValue('--piece-slot');
+  const parsed = Number.parseFloat(raw);
+  const slot = Number.isFinite(parsed) && parsed > 0 ? parsed : 0.84;
+  const size = Math.min(rect.width, rect.height) * slot;
   return {
     left: rect.left + ((rect.width - size) / 2),
     top: rect.top + ((rect.height - size) / 2),
@@ -1916,6 +1920,132 @@ function syncBoardExtrasDisclosure() {
   extras.open = !window.matchMedia('(max-width: 800px)').matches;
 }
 
+const stackedLayoutQuery = window.matchMedia('(max-width: 800px)');
+let editingScrollY = 0;
+let keyboardFitFrame = 0;
+
+function lockEditingScroll() {
+  if (document.body.dataset.scrollLocked === '1') {
+    return;
+  }
+  editingScrollY = window.scrollY || 0;
+  document.body.dataset.scrollLocked = '1';
+  document.body.style.position = 'fixed';
+  document.body.style.top = `-${editingScrollY}px`;
+  document.body.style.left = '0';
+  document.body.style.right = '0';
+  document.body.style.width = '100%';
+}
+
+function unlockEditingScroll() {
+  if (document.body.dataset.scrollLocked !== '1') {
+    return;
+  }
+  document.body.dataset.scrollLocked = '';
+  document.body.style.position = '';
+  document.body.style.top = '';
+  document.body.style.left = '';
+  document.body.style.right = '';
+  document.body.style.width = '';
+  window.scrollTo(0, editingScrollY);
+}
+
+/**
+ * While the moves field is focused on a phone, pin the board and the field to the
+ * visible viewport (the area above the keyboard) and make the board the largest
+ * square that still leaves the field on screen.
+ */
+function fitEditingBoard() {
+  const root = document.documentElement;
+  const editing = document.body.classList.contains('is-editing-moves');
+  if (!editing || !stackedLayoutQuery.matches) {
+    root.style.removeProperty('--vv-height');
+    root.style.removeProperty('--vv-offset');
+    root.style.removeProperty('--editing-board');
+    return;
+  }
+
+  const viewport = window.visualViewport;
+  const visible = Math.round(viewport?.height ?? window.innerHeight);
+  const offset = Math.round(viewport?.offsetTop ?? 0);
+  root.style.setProperty('--vv-height', `${visible}px`);
+  root.style.setProperty('--vv-offset', `${offset}px`);
+
+  const stage = document.getElementById('board-stage');
+  const notation = document.getElementById('notation-dock');
+  const board = elements.board;
+  const play = stage?.parentElement;
+  if (!stage || !notation || !board || !play) {
+    return;
+  }
+
+  const playStyle = getComputedStyle(play);
+  const stageStyle = getComputedStyle(stage);
+  const stageGap = Number.parseFloat(stageStyle.rowGap || stageStyle.gap) || 0;
+  let used = Number.parseFloat(playStyle.paddingTop) + Number.parseFloat(playStyle.paddingBottom);
+  used += Number.parseFloat(stageStyle.paddingTop) + Number.parseFloat(stageStyle.paddingBottom);
+  used += notation.offsetHeight;
+
+  let visibleStageChildren = 0;
+  for (const child of stage.children) {
+    if (getComputedStyle(child).display === 'none') {
+      continue;
+    }
+    visibleStageChildren += 1;
+    if (child.contains(board)) {
+      const layoutStyle = getComputedStyle(child);
+      const layoutGap = Number.parseFloat(layoutStyle.rowGap || layoutStyle.gap) || 0;
+      let sideParts = 0;
+      for (const part of child.children) {
+        if (part === board || part.contains(board) || getComputedStyle(part).display === 'none') {
+          continue;
+        }
+        used += part.offsetHeight;
+        sideParts += 1;
+      }
+      if (sideParts) {
+        used += layoutGap * sideParts;
+      }
+    } else {
+      used += child.offsetHeight;
+    }
+  }
+  if (visibleStageChildren > 1) {
+    used += stageGap * (visibleStageChildren - 1);
+  }
+
+  const column = stage.clientWidth
+    - (Number.parseFloat(stageStyle.paddingLeft) || 0)
+    - (Number.parseFloat(stageStyle.paddingRight) || 0);
+  const available = visible - used - 12;
+  const size = Math.max(140, Math.min(Math.floor(column), Math.floor(available)));
+  root.style.setProperty('--editing-board', `${size}px`);
+}
+
+function scheduleKeyboardFit() {
+  if (keyboardFitFrame) {
+    return;
+  }
+  keyboardFitFrame = window.requestAnimationFrame(() => {
+    keyboardFitFrame = 0;
+    fitEditingBoard();
+  });
+}
+
+function beginEditingMoves() {
+  document.body.classList.add('is-editing-moves');
+  if (stackedLayoutQuery.matches) {
+    lockEditingScroll();
+  }
+  scheduleKeyboardFit();
+}
+
+function endEditingMoves() {
+  document.body.classList.remove('is-editing-moves');
+  unlockEditingScroll();
+  scheduleKeyboardFit();
+}
+
 function pieceOnSquare(game, square) {
   for (const row of game?.board ?? []) {
     for (const cell of row) {
@@ -2129,13 +2259,15 @@ function bindEvents() {
     updateBoard(elements.moves.value, true);
   });
 
-  elements.moves.addEventListener('input', queueLiveRender);
-  elements.moves.addEventListener('focus', () => {
-    document.body.classList.add('is-editing-moves');
+  elements.moves.addEventListener('input', () => {
+    queueLiveRender();
+    scheduleKeyboardFit();
   });
-  elements.moves.addEventListener('blur', () => {
-    document.body.classList.remove('is-editing-moves');
-  });
+  elements.moves.addEventListener('focus', beginEditingMoves);
+  elements.moves.addEventListener('blur', endEditingMoves);
+  window.visualViewport?.addEventListener('resize', scheduleKeyboardFit);
+  window.visualViewport?.addEventListener('scroll', scheduleKeyboardFit);
+  window.addEventListener('resize', scheduleKeyboardFit);
   elements.themeSelect.addEventListener('change', (event) => applyTheme(event.target.value));
   elements.pieceSetSelect.addEventListener('change', (event) => applyPieceSet(event.target.value));
   elements.piecePaletteSelect.addEventListener('change', (event) => applyPiecePalette(event.target.value));
