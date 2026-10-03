@@ -1,3 +1,10 @@
+# [1.8.0](https://github.com/wsams/acnab/compare/v1.7.1...v1.8.0) (2026-10-03)
+
+
+### Features
+
+* smooth click-to-move play and accurate CPU levels ([#13](https://github.com/wsams/acnab/issues/13)) ([ed4a944](https://github.com/wsams/acnab/commit/ed4a94469e3d4f2f3d97ac1d5963896a555d542c))
+
 ## [1.7.1](https://github.com/wsams/acnab/compare/v1.7.0...v1.7.1) (2026-07-28)
 
 
