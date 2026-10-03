@@ -746,6 +746,7 @@ textarea {
 }
 
 .board {
+  --piece-slot: 0.84;
   display: grid;
   grid-template-columns: auto repeat(8, minmax(2.2rem, 1fr));
   gap: 0;
@@ -1175,8 +1176,8 @@ textarea {
 .board-square .piece {
   display: grid;
   place-items: center;
-  width: 84%;
-  height: 84%;
+  width: calc(var(--piece-slot, 0.84) * 100%);
+  height: calc(var(--piece-slot, 0.84) * 100%);
   line-height: 0;
   filter: drop-shadow(0 2px 1px rgba(0, 0, 0, 0.22));
 }
@@ -1218,6 +1219,7 @@ textarea {
   font-family: "Figtree", sans-serif;
   font-weight: 500;
 }
+
 
 .moves-list,
 .saved-games {
@@ -1747,9 +1749,11 @@ textarea {
     flex: 1;
   }
 
+  /* Width follows the card. 72vw left a wide empty margin on phones;
+     dvh only caps the square when the screen is short (landscape). */
   .board {
-    width: min(100%, 72vw);
-    max-width: 22rem;
+    width: min(100%, 74dvh);
+    max-width: 34rem;
     margin-inline: auto;
   }
 
@@ -1887,6 +1891,97 @@ textarea {
 
   .replay-position {
     margin-left: 0;
+  }
+}
+
+/* iPhone-class portrait: the board fills the card. Rank/file labels stay
+   a slim gutter so they don't sit on top of the pieces. */
+@media (max-width: 540px) {
+  .site-header,
+  .app-shell,
+  .site-footer {
+    padding-left: 0.4rem;
+    padding-right: 0.4rem;
+  }
+
+  .site-header {
+    padding-top: 0.4rem;
+  }
+
+  .panel-board {
+    gap: 0.35rem;
+    padding: 0.4rem 0.3rem 0.2rem;
+  }
+
+  .panel-notation {
+    padding-left: 0.45rem;
+    padding-right: 0.45rem;
+  }
+
+  .panel-board .status-card {
+    padding: 0.45rem 0.65rem;
+  }
+
+  .clock-face {
+    padding: 0.28rem 0.5rem;
+  }
+
+  .clock-time {
+    font-size: 1.05rem;
+  }
+
+  .board-layout {
+    gap: 0.22rem;
+  }
+
+  .board {
+    --piece-slot: 1;
+    width: 100%;
+    max-width: none;
+    grid-template-columns: auto repeat(8, minmax(0, 1fr));
+  }
+
+  .board .legend.board-cell {
+    aspect-ratio: auto;
+    align-self: center;
+    justify-self: center;
+    min-height: 0;
+    width: auto;
+    min-width: 0.85rem;
+    padding: 0 0.05rem;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    opacity: 0.72;
+  }
+
+  .board-square {
+    min-width: 0;
+  }
+
+  .board-square .piece {
+    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.38));
+  }
+
+  .board-square .piece-svg,
+  .piece-flyer .piece-svg,
+  .piece-victim .piece-svg {
+    transform: scale(1.12);
+    transform-origin: 50% 50%;
+  }
+
+  /* The gutter already names each file and rank. In-square names were covering pieces. */
+  .board-square .coordinate {
+    display: none;
+  }
+
+  body.is-editing-moves .clock-panel {
+    display: none;
+  }
+
+  body.is-editing-moves .board {
+    width: min(100%, 66vw);
+    max-width: none;
   }
 }
 

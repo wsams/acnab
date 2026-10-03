@@ -1005,7 +1005,10 @@ function findKingSquare(game, color) {
 
 function pieceSlotRect(squareEl) {
   const rect = squareEl.getBoundingClientRect();
-  const size = Math.min(rect.width, rect.height) * 0.84;
+  const raw = getComputedStyle(elements.board).getPropertyValue('--piece-slot');
+  const parsed = Number.parseFloat(raw);
+  const slot = Number.isFinite(parsed) && parsed > 0 ? parsed : 0.84;
+  const size = Math.min(rect.width, rect.height) * slot;
   return {
     left: rect.left + ((rect.width - size) / 2),
     top: rect.top + ((rect.height - size) / 2),
