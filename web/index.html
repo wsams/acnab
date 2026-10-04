@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
-  <meta name="description" content="acnab — type chess notation and watch the board update live. Play free in your browser on GitHub Pages." />
-  <title>acnab — free chess notation board</title>
+  <meta name="description" content="Play chess free on GitHub Pages with acnab. Take lessons in the browser: a coach explains candidate moves. No account, no ads, no tracking." />
+  <title>acnab — free chess, free lessons</title>
   <link rel="stylesheet" href="app.css" />
   <script>
     (function () {
@@ -32,7 +32,7 @@
   <header class="site-header">
     <div class="brand-block">
       <p class="brand">acnab</p>
-      <p class="tagline">Chess notation, live on the board.</p>
+      <p class="tagline">Play free on GitHub. Take lessons. No ads, no tracking.</p>
     </div>
     <nav class="header-actions" aria-label="Site links">
       <a
@@ -96,6 +96,7 @@
       <div class="board-layout">
         <aside class="captures captures-black" id="captures-black" aria-label="Pieces captured by black"></aside>
         <div class="board-frame">
+          <p id="lesson-banner" class="lesson-banner" hidden>Lesson line — nothing here is played until you choose it.</p>
           <div id="board" class="board" aria-live="polite"></div>
           <div id="promotion-picker" class="promotion-picker" hidden></div>
         </div>
@@ -105,6 +106,40 @@
 
     <section class="panel panel-notation" id="notation-dock">
       <div class="notation-dock-handle" aria-hidden="true"></div>
+
+      <section class="lessons-panel" id="lessons-panel" data-enabled="false" aria-label="Chess lessons">
+        <div class="lessons-header">
+          <div>
+            <p class="eyebrow">Student portal</p>
+            <h2 class="lessons-title">Lessons</h2>
+          </div>
+          <button
+            id="lessons-toggle"
+            type="button"
+            class="button ghost"
+            aria-pressed="false"
+            title="A second engine explains moves and never plays them"
+          >
+            Lessons off
+          </button>
+        </div>
+        <p id="lessons-intro" class="lessons-intro">
+          A second engine that never moves a piece. It explains tries in real chess terms — pins, outposts, pawn breaks, opposition — and lets you preview the line. Free in this browser: no account, no ads, no tracking.
+        </p>
+        <div id="lessons-body" hidden>
+          <div class="lessons-depth" id="lessons-depth" role="group" aria-label="Coach depth">
+            <button type="button" class="button ghost small" data-depth="glance" aria-pressed="false">Glance</button>
+            <button type="button" class="button ghost small" data-depth="study" aria-pressed="true">Study</button>
+            <button type="button" class="button ghost small" data-depth="master" aria-pressed="false">Master class</button>
+          </div>
+          <p id="lessons-depth-hint" class="lessons-depth-hint"></p>
+          <p id="lessons-status" class="lessons-status" role="status"></p>
+          <div id="lessons-decision" class="lessons-decision" hidden></div>
+          <div id="lessons-preview" class="lessons-preview" hidden></div>
+          <ol id="lessons-options" class="lessons-options"></ol>
+        </div>
+      </section>
+
       <div class="panel-heading compact-heading">
         <p class="eyebrow">Notation</p>
         <h1>Moves</h1>
@@ -282,6 +317,7 @@
           <li><strong>Click to move</strong> (on by default): click a piece to lift it, then click a highlighted square to place it. The moves box fills in the SAN, including the move number, as each piece lands. Press Escape or click the piece again to put it down. Promotion asks for a piece. Turn the button off to type notation only.</li>
           <li><strong>Play controls</strong> under the board step through or autoplay the game; pieces glide into place (also during live notation updates).</li>
           <li><strong>CPU player</strong> (off by default): toss a coin for White, then type or click your moves — Stockfish replies automatically. Strength from Intermediate upward is Stockfish’s own UCI Elo (1320–2500). Beginner and Casual are approximate: they play the 1320 engine and replace some moves with a random legal move, because Stockfish cannot aim below 1320. Maximum is uncapped lite Stockfish. <strong>Pace</strong> (on by default) makes the CPU take about your average think time so the clocks stay even; turn it off to reply as soon as the search finishes.</li>
+          <li><strong>Lessons</strong> (off by default): a second Stockfish that never plays. It offers a few tries, explains them with chess ideas (development, pins, outposts, pawn breaks, opposition), and lets you preview the line on the board. Press <strong>Play</strong> only when you want that move written into the game. After your move, and after the CPU replies, the coach reads the new position. Glance, Study, and Master class change how long it thinks. Everything stays in this browser.</li>
         </ul>
       </details>
     </section>
@@ -289,12 +325,12 @@
 
   <footer class="site-footer">
     <p>
-      <strong>acnab</strong> is free on GitHub Pages.
+      <strong>acnab</strong> is free on GitHub Pages — play and take lessons with no account, no ads, and no tracking.
       Source on
       <a href="https://github.com/wsams/acnab" rel="noopener noreferrer">GitHub</a>.
-      Optional CPU opponent uses
+      The CPU and the lessons coach use
       <a href="https://github.com/nmrugg/stockfish.js" rel="noopener noreferrer">Stockfish.js</a>
-      (GPLv3).
+      (GPLv3), vendored in this page.
     </p>
   </footer>
 
