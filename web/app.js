@@ -6,6 +6,7 @@ import {
   legalMovesFromSquare,
   moveNumberSignature,
   renderGame,
+  renderLine,
   selectCpuMove,
 } from './engine.js';
 import {
@@ -43,6 +44,7 @@ import {
   parseShareLocation,
   writeShareHash,
 } from './share.js';
+import { mountLessonPortal } from './lessons.js';
 
 const STORAGE_KEYS = {
   draft: 'acnab:draft',
@@ -154,9 +156,12 @@ const state = {
     humanTurnDurations: [],
     paceTargetMs: null,
   },
+  lessonPreview: null,
+  offerCoaching: true,
 };
 
 const stockfish = new StockfishCpu();
+let lessons = null;
 
 const elements = {
   board: document.querySelector('#board'),
@@ -216,6 +221,7 @@ const elements = {
   cpuStatus: document.querySelector('#cpu-status'),
   clickMoves: document.querySelector('#click-moves'),
   promotionPicker: document.querySelector('#promotion-picker'),
+  lessonBanner: document.querySelector('#lesson-banner'),
 };
 
 const clock = new ChessClock({
@@ -390,6 +396,7 @@ function paintCpuUi() {
       elements.coinCaption.textContent = 'Coin toss decides who plays White.';
     }
     elements.coinStage?.classList.remove('is-spinning', 'is-resolved');
+    notifyLessons();
     return;
   }
 
@@ -400,6 +407,7 @@ function paintCpuUi() {
     if (elements.coinCaption) {
       elements.coinCaption.textContent = 'Heads: you play White. Tails: CPU plays White.';
     }
+    notifyLessons();
     return;
   }
 
@@ -407,6 +415,7 @@ function paintCpuUi() {
     if (elements.cpuStatus) {
       elements.cpuStatus.textContent = 'Start a match to toss for sides.';
     }
+    notifyLessons();
     return;
   }
 
@@ -419,11 +428,13 @@ function paintCpuUi() {
     } else {
       elements.cpuStatus.textContent = `Stockfish (${level.label}) is thinking…`;
     }
+    notifyLessons();
     return;
   }
 
   if (state.game?.isGameOver) {
     elements.cpuStatus.textContent = `Match over · you are ${sideLabel(humanSide)}. ${state.game.status}`;
+    notifyLessons();
     return;
   }
 
@@ -433,6 +444,7 @@ function paintCpuUi() {
   } else {
     elements.cpuStatus.textContent = `CPU to move as ${sideLabel(state.cpu.cpuSide)}.`;
   }
+  notifyLessons();
 }
 
 function updateCpuHandicapHint() {
@@ -592,6 +604,7 @@ async function startCpuMatch({ announceEngine = true } = {}) {
   elements.moves.value = '';
   elements.saveName.value = '';
   state.clockMoveSig = '';
+  state.offerCoaching = true;
   clock.reset();
   updateBoard('', false, { skipCpu: true });
 
@@ -958,10 +971,14 @@ function applyTheme(theme) {
   document.documentElement.style.colorScheme = THEMES[nextTheme].scheme;
   elements.themeSelect.value = nextTheme;
   localStorage.setItem(STORAGE_KEYS.theme, nextTheme);
-  if (state.piecePalette === 'theme') {
-    applyPiecePaletteVars('theme');
-    renderBoard(state.game, { settle: true });
-  }
+    if (state.piecePalette === 'theme') {
+      applyPiecePaletteVars('theme');
+      if (state.lessonPreview) {
+        lessons?.reapplyPreview();
+      } else {
+        renderBoard(state.game, { settle: true });
+      }
+    }
 }
 
 function applyPieceSet(setId) {
@@ -971,7 +988,11 @@ function applyPieceSet(setId) {
   document.body.dataset.pieceSet = nextSet;
   elements.pieceSetSelect.value = nextSet;
   localStorage.setItem(STORAGE_KEYS.pieceSet, nextSet);
-  renderBoard(state.game, { settle: true });
+  if (state.lessonPreview) {
+    lessons?.reapplyPreview();
+  } else {
+    renderBoard(state.game, { settle: true });
+  }
   renderCaptures(state.game);
 }
 
@@ -984,7 +1005,11 @@ function applyPiecePalette(paletteId) {
   localStorage.setItem(STORAGE_KEYS.piecePalette, nextPalette);
   applyPiecePaletteVars(nextPalette);
   drawPaletteSwatches();
-  renderBoard(state.game, { settle: true });
+  if (state.lessonPreview) {
+    lessons?.reapplyPreview();
+  } else {
+    renderBoard(state.game, { settle: true });
+  }
   renderCaptures(state.game);
   paintClock();
   paintCpuUi();
@@ -996,7 +1021,11 @@ function setBoardFlipped(flipped) {
   state.animToken += 1;
   clearPieceFlyers();
   syncFlipButton();
-  renderBoard(state.game, { settle: false });
+  if (state.lessonPreview) {
+    lessons?.reapplyPreview();
+  } else {
+    renderBoard(state.game, { settle: false });
+  }
   renderCaptures(state.game);
 }
 
@@ -1591,6 +1620,7 @@ async function paintGame(game, {
   } else {
     paintCpuUi();
   }
+  notifyLessons();
 }
 
 /** True when movetext already ends with `N. ` (space after the period) for White. */
@@ -1914,6 +1944,7 @@ async function openSharedGame(moves, {
   feedback = 'Playing shared game…',
 } = {}) {
   const text = String(moves ?? '');
+  state.offerCoaching = !text.trim();
   elements.moves.value = text;
   state.draft = text;
   localStorage.setItem(STORAGE_KEYS.draft, text);
@@ -2025,6 +2056,7 @@ function resetBoard() {
   elements.moves.value = '';
   elements.saveName.value = '';
   state.clockMoveSig = '';
+  state.offerCoaching = true;
   clock.reset();
   updateBoard('', true);
 }
@@ -2321,6 +2353,10 @@ async function choosePromotion(type) {
 }
 
 async function placeOrLift(square) {
+  if (state.lessonPreview) {
+    setFeedback('This is a lesson preview. Go back to the game, or press Play, before moving a piece.', true);
+    return;
+  }
   if (!state.clickMoves || state.animating || state.cpu.thinking || state.cpu.tossing) {
     return;
   }
@@ -2388,6 +2424,101 @@ async function placeOrLift(square) {
   paintBoardSelection();
 }
 
+function lessonContext() {
+  const liveGame = state.fullGame?.fen ? state.fullGame : state.game;
+  const history = liveGame?.history ?? [];
+  const lastMove = history.length ? history[history.length - 1] : null;
+  return {
+    fen: liveGame?.fen,
+    status: liveGame?.status,
+    isGameOver: Boolean(liveGame?.isGameOver),
+    isCheckmate: Boolean(liveGame?.isCheckmate),
+    turn: liveGame?.turn,
+    sans: liveGame?.appliedMoves ?? [],
+    sideNames: getPaletteSideNames(state.piecePalette),
+    lastMove,
+    live: isViewingLive(),
+    offerCoaching: state.offerCoaching,
+    cpu: {
+      enabled: state.cpu.enabled,
+      thinking: state.cpu.thinking,
+      tossing: state.cpu.tossing,
+      humanSide: state.cpu.humanSide,
+      cpuSide: state.cpu.cpuSide,
+    },
+  };
+}
+
+function notifyLessons() {
+  lessons?.sync(lessonContext());
+}
+
+function showLessonPreview(payload) {
+  if (!payload?.game) {
+    return;
+  }
+  state.lessonPreview = payload;
+  stopReplayPlayback();
+  clearLift();
+  renderBoard(payload.game, { settle: false });
+  elements.board?.classList.add('is-lesson-preview');
+  if (payload.from) {
+    squareNode(payload.from)?.classList.add('is-coach-source');
+  }
+  if (payload.to) {
+    squareNode(payload.to)?.classList.add('is-coach-target');
+  }
+  if (elements.lessonBanner) {
+    elements.lessonBanner.hidden = false;
+    elements.lessonBanner.textContent = payload.banner || 'Lesson line — nothing here is played until you choose it.';
+  }
+}
+
+function hideLessonPreview({ restore = true } = {}) {
+  state.lessonPreview = null;
+  elements.board?.classList.remove('is-lesson-preview');
+  if (elements.lessonBanner) {
+    elements.lessonBanner.hidden = true;
+  }
+  if (restore && state.game?.board) {
+    renderBoard(state.game, { settle: false });
+  }
+}
+
+async function playLessonMove(san) {
+  clearTimeout(state.requestTimer);
+  let game;
+  try {
+    game = renderGame(elements.moves.value);
+  } catch (error) {
+    setFeedback(error.message, true);
+    return;
+  }
+  if (!isViewingLive()) {
+    setFeedback('Return to the latest move before playing.', true);
+    return;
+  }
+  if (game.isGameOver) {
+    setFeedback(game.status, true);
+    return;
+  }
+  if (state.cpu.enabled && state.cpu.humanSide && game.turn !== state.cpu.humanSide) {
+    setFeedback('The CPU is to move.', true);
+    return;
+  }
+  try {
+    renderLine(game.fen, [san]);
+  } catch {
+    setFeedback(`${san} is not legal in this position.`, true);
+    return;
+  }
+  const nextMoves = appendSanToMovetext(game.appliedMoves, san);
+  elements.moves.value = nextMoves;
+  const caret = nextMoves.length;
+  elements.moves.setSelectionRange(caret, caret);
+  await updateBoard(nextMoves, false, { statusNote: san });
+}
+
 function bindEvents() {
   elements.renderForm.addEventListener('submit', (event) => {
     event.preventDefault();
@@ -2441,6 +2572,24 @@ function bindEvents() {
     choosePromotion(choice.dataset.promotion);
   });
   window.addEventListener('keydown', (event) => {
+    const typing = event.target === elements.moves
+      || event.target instanceof HTMLInputElement
+      || event.target instanceof HTMLTextAreaElement
+      || event.target instanceof HTMLSelectElement;
+    if (event.key === 'Escape' && state.lessonPreview && !typing) {
+      lessons?.exitPreview();
+      return;
+    }
+    if (!typing && state.lessonPreview && event.key === 'ArrowRight') {
+      lessons?.step(1);
+      event.preventDefault();
+      return;
+    }
+    if (!typing && state.lessonPreview && event.key === 'ArrowLeft') {
+      lessons?.step(-1);
+      event.preventDefault();
+      return;
+    }
     if (event.key === 'Escape' && state.boardInput.from) {
       clearLift();
     }
@@ -2523,6 +2672,7 @@ function bindEvents() {
         return;
       }
       elements.saveName.value = game.name;
+      state.offerCoaching = !String(game.moves || '').trim();
       elements.moves.value = game.moves;
       updateBoard(game.moves, true);
       return;
@@ -2553,6 +2703,7 @@ function bootstrap() {
 
   const sharedMoves = loadMovesFromShareLocation();
   const initialMoves = sharedMoves != null ? sharedMoves : state.draft;
+  state.offerCoaching = !String(initialMoves || '').trim();
   elements.moves.value = initialMoves;
   if (sharedMoves != null) {
     state.draft = sharedMoves;
@@ -2562,6 +2713,12 @@ function bootstrap() {
   paintClickMode();
   syncBoardExtrasDisclosure();
   paintClock();
+  lessons = mountLessonPortal({
+    getContext: lessonContext,
+    onPreview: showLessonPreview,
+    onClearPreview: hideLessonPreview,
+    onPlayMove: playLessonMove,
+  });
   paintGame(state.game, { skipCpu: true });
   paintReplayUi();
   drawSavedGames();

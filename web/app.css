@@ -450,12 +450,17 @@ code {
   order: 0;
 }
 
-.panel-notation .cpu-panel {
+/* Moves stay above the coach so turning lessons on does not push the notation off the first screen. */
+.panel-notation .controls-stack {
   order: 1;
 }
 
-.panel-notation .controls-stack {
+.panel-notation .lessons-panel {
   order: 2;
+}
+
+.panel-notation .cpu-panel {
+  order: 3;
 }
 
 .notation-dock-handle {
@@ -711,6 +716,11 @@ textarea {
 
 .button.primary:hover {
   background: var(--accent-strong);
+}
+
+.button.small {
+  padding: 0.4rem 0.7rem;
+  font-size: 0.82rem;
 }
 
 .button.ghost {
@@ -1403,6 +1413,11 @@ textarea {
   background: color-mix(in srgb, var(--accent) 38%, var(--board-dark));
 }
 
+.board.is-lesson-preview .board-square.is-coach-source,
+.board.is-lesson-preview .board-square.is-coach-target {
+  box-shadow: inset 0 0 0 3px color-mix(in srgb, var(--accent-strong) 80%, white);
+}
+
 .board-square.light.is-in-check,
 .board-square.dark.is-in-check {
   box-shadow: inset 0 0 0 3px #e2a21a;
@@ -1701,6 +1716,242 @@ textarea {
   background: color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
+.lesson-banner {
+  margin: 0 auto 0.45rem;
+  max-width: 28rem;
+  padding: 0.4rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: color-mix(in srgb, var(--accent) 18%, var(--panel));
+  color: var(--text);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  text-align: center;
+}
+
+.lesson-banner[hidden] {
+  display: none;
+}
+
+.lessons-panel {
+  display: grid;
+  gap: 0.7rem;
+  padding: 0.85rem 0.95rem;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 10%, transparent), transparent 2.4rem),
+    color-mix(in srgb, var(--status-bg) 70%, transparent);
+}
+
+.lessons-panel.is-thinking {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.lessons-agreement {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.lessons-seats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.lessons-seats .button[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.lessons-seats .button:disabled {
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+@media (min-width: 801px) {
+  /* Keep the moves box on the first screen. The tries scroll inside the coach. */
+  .lessons-panel[data-enabled='true'] #lessons-body {
+    max-height: min(42vh, 24rem);
+    overflow: auto;
+    padding-right: 0.15rem;
+  }
+}
+
+.lessons-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.lessons-title {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.lessons-intro,
+.lessons-depth-hint,
+.lessons-status,
+.lesson-copy,
+.lesson-continuation,
+.lesson-gap,
+.lessons-preview-count,
+.lessons-wait,
+.lessons-options-intro p,
+.lessons-decision p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.lessons-status {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.lessons-depth {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.lessons-depth .button[aria-pressed='true'] {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.lessons-decision,
+.lessons-preview,
+.lesson-card {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.75rem 0.8rem;
+  border-radius: 0.9rem;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.lessons-decision {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+
+.lessons-decision h3,
+.lessons-preview-headline,
+.lesson-rank {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+
+.lessons-kicker {
+  margin: 0;
+  color: var(--accent-strong);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.lessons-options {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.lessons-options-intro {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.lesson-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.lesson-san {
+  font-family: "Syne", sans-serif;
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.lesson-eval {
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 0.82rem;
+}
+
+.lesson-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lesson-chips li {
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+}
+
+.lesson-continuation {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 0.78rem;
+}
+
+.lesson-card-actions,
+.lessons-preview-controls,
+.lessons-preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.lessons-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.lesson-ply {
+  border: 0;
+  border-radius: 0.45rem;
+  padding: 0.2rem 0.4rem;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.lesson-ply.is-current {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.board.is-lesson-preview {
+  cursor: default;
+}
+
 @keyframes coin-flip {
   from {
     transform: rotateY(0deg) translateY(0);
@@ -1992,6 +2243,10 @@ textarea {
     order: 2;
   }
 
+  .panel-notation .lessons-panel {
+    order: 3;
+  }
+
   .notation-dock-handle {
     display: none;
   }
@@ -2152,6 +2407,7 @@ textarea {
   body.is-editing-moves .board-extras,
   body.is-editing-moves .replay-panel,
   body.is-editing-moves .cpu-panel,
+  body.is-editing-moves .lessons-panel,
   body.is-editing-moves .cpu-controls,
   body.is-editing-moves .coin-stage {
     display: none;

@@ -2,13 +2,37 @@
 
 [![Play free on GitHub Pages](https://img.shields.io/badge/Play%20free-on%20GitHub%20Pages-d4a15a?style=for-the-badge&labelColor=14110f)](https://wsams.github.io/acnab/web/)
 
-**acnab** renders chess positions from standard chess notation in the terminal and in the browser.
+**Play chess right on GitHub. Take lessons free.** No install, no account, no ads, no tracking.
 
-**Play it free right now:** [wsams.github.io/acnab/web](https://wsams.github.io/acnab/web/) — no install, no account. Type SAN/PGN moves and watch the board update live. Optional **CPU player** (Stockfish in the browser) can be toggled on for a real game after a coin toss for White.
+Open **[wsams.github.io/acnab/web](https://wsams.github.io/acnab/web/)** and the board is already there. Type SAN/PGN, or click pieces. Two players can each turn on a coach before the first move, and both of them see that choice. The page is static: notation, saves, the CPU, and the coach all stay in your browser.
+
+**acnab** renders chess positions from standard chess notation in the terminal and in the browser.
 
 ![acnab web UI — Midnight theme with Blush & Magenta pieces, dual clocks, live notation, and local saves](docs/web-ui.png)
 
-The browser UI shows the live board beside a Moves panel: type SAN/PGN, hit **Render**, and the position updates with FEN, material, and move history. Dual clocks, theme/piece-color presets, and browser-local saves sit alongside the board for over-the-board notation tracking. Turn on **CPU player** to face Stockfish at a chosen strength. Type SAN, or use **Click to move**: click a piece to lift it, click a square to place it, and the notation fills in with the move.
+The browser UI shows the live board beside a Moves panel: type SAN/PGN, hit **Render**, and the position updates with FEN, material, and move history. Dual clocks, theme/piece-color presets, and browser-local saves sit alongside the board. Turn on **CPU player** to face Stockfish at a chosen strength. **Lessons** is a second engine that never moves a piece: before the first move, each player chooses a coach, both players see who has one, and the choice locks for that game. It explains candidate moves in chess language and lets you preview a line before you commit. Type SAN, or use **Click to move**.
+
+## Play free, and take a lesson
+
+The whole app is published on GitHub Pages from this repository. You do not download a client, create an account, or sit through an ad.
+
+- **Play:** [https://wsams.github.io/acnab/web/](https://wsams.github.io/acnab/web/)
+- **Lessons:** on a new board, each side turns a coach on before the first move. Both players see the choice, and it cannot be turned on once the game has started. Against the CPU, choose your own coach before the match starts.
+- **Privacy:** acnab does not include analytics, accounts, or ads. Games and the lesson setting are stored in your browser only. Stockfish is vendored under `web/vendor/stockfish/` (GPLv3) and runs locally.
+
+### What the coach does
+
+Lessons are a second Stockfish. With two players at the board, each side can take a coach. The buttons stay visible, so you always know when the other player is using one. That choice is made before the first move. Against the CPU, you choose your own coach before the match starts. The coach does not play a move.
+
+- It offers a few tries, scored from White’s side of the evaluation, and says whether each one is the first choice, a sound alternative, or a concession.
+- The write-up uses real chess ideas it can actually see on the board: development, the center, king safety, absolute and relative pins, forks, discovered check, skewers, outposts, passed pawns, pawn breaks, open files, prophylaxis, and opposition. A Ruy Lopez bishop is described as pressure, not a pin, while the d-pawn still blocks the king.
+- **Preview line** steps through the coach’s continuation on the board. **Watch** plays that line forward. Nothing is written into the notation.
+- **Play** commits just that one move, the same way a click or a typed SAN would. You can ignore the suggestions and move however you like.
+- With two players, tries appear only on the turn of a side that chose a coach. The other player still sees that the coach is on.
+- After a coached move, the coach says whether it was the move it wanted. After the other side replies, it compares that reply with the line it expected, then reads the new position.
+- **Glance**, **Study**, and **Master class** change how long the coach thinks. Study is the default.
+
+The CPU opponent is separate. Its strength is still the level you pick. The coach stays full-strength so a weaker CPU can be compared with the try a stronger player would choose.
 
 ## CLI usage
 
@@ -48,7 +72,7 @@ python3 chess.py --list-games
 
 ### Free on GitHub Pages
 
-Open **[https://wsams.github.io/acnab/web/](https://wsams.github.io/acnab/web/)** to play in the browser for free.
+Open **[https://wsams.github.io/acnab/web/](https://wsams.github.io/acnab/web/)** to play in the browser for free. On a new board, turn a coach on before the first move. No account, no ads, no tracking.
 
 GitHub Pages publishes the static UI from `web/` (the site root redirects there). The build is fully static and client-side:
 
@@ -60,7 +84,8 @@ GitHub Pages publishes the static UI from `web/` (the site root redirects there)
 - play controls to step through or autoplay a game with a gliding piece animation
 - click to lift a piece and click to place it; the moves box fills in SAN as each move lands
 - optional CPU opponent (Stockfish.js 18 lite WASM) — off by default; coin toss for who plays White. Limited levels use Stockfish’s UCI Elo scale (1320–2500). Beginner and Casual are approximate mixes below that floor.
-- no CDN runtime dependency for the chess engine (Stockfish is vendored under `web/vendor/stockfish/`, GPLv3)
+- optional **Lessons** coach — off by default; a second, full-strength Stockfish that never moves. Two players each choose a coach before the first move, and both can see who has one. It cannot be turned on in the middle of a game. It explains candidate moves (pins, forks, outposts, pawn breaks, opposition, and the opening you just entered), lets you preview or watch the line, and only writes a move if you press Play.
+- no CDN runtime dependency for the chess engine (Stockfish is vendored under `web/vendor/stockfish/`, GPLv3). The page does not load analytics or ads.
 
 Example shared game (opens at move 1 and plays through to mate):
 [Open the demo board](https://wsams.github.io/acnab/web/#g=MS4gZTQgYzUgMi4gTmYzIGQ2IDMuIGQ0IGN4ZDQgNC4gTnhkNCBiNSA1LiBCeGI1KyBCZDcgNi4gTmMzIGY1IDcuIGV4ZjUgZzYgOC4gUWYzIGd4ZjUgOS4gUWg1Iw)

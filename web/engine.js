@@ -321,6 +321,63 @@ export function renderGame(movesText, { ply = null } = {}) {
   };
 }
 
+/**
+ * Board payload for a short line played from an arbitrary FEN.
+ * Used by the lessons coach to preview a variation without touching the game.
+ */
+export function renderLine(fen, sans = []) {
+  const chess = new Chess(fen);
+  const history = [];
+  const captures = { white: [], black: [] };
+  const moves = Array.isArray(sans) ? sans : [];
+
+  for (let index = 0; index < moves.length; index += 1) {
+    const token = moves[index];
+    let move = null;
+    try {
+      move = chess.move(token, { strict: false });
+    } catch {
+      move = null;
+    }
+    if (!move) {
+      throw new Error(`Preview move ${index + 1} (${token}) is illegal from this position.`);
+    }
+    const summary = summarizeMove(move);
+    history.push(summary);
+    if (summary.captured) {
+      captures[summary.color].push(summary.captured);
+    }
+  }
+
+  const isGameOver = chess.isGameOver();
+  let result = null;
+  if (isGameOver) {
+    if (chess.isCheckmate()) {
+      result = chess.turn() === 'w' ? '0-1' : '1-0';
+    } else {
+      result = '1/2-1/2';
+    }
+  }
+
+  return {
+    input: moves.join(' '),
+    normalizedInput: moves.join(' '),
+    appliedMoves: history.map((move) => move.san),
+    history,
+    totalMoves: moves.length,
+    moveCount: history.length,
+    fen: chess.fen(),
+    turn: chess.turn() === 'w' ? 'white' : 'black',
+    isCheck: chess.isCheck(),
+    isCheckmate: chess.isCheckmate(),
+    isGameOver,
+    result,
+    status: gameStatus(chess),
+    board: boardPayload(chess),
+    captures: capturesPayload(captures),
+  };
+}
+
 /** Apply a UCI move ({from,to,promotion}) on a FEN and return the SAN string. */
 export function sanFromUci(fen, uciMove) {
   const chess = new Chess(fen);
