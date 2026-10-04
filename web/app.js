@@ -120,6 +120,7 @@ const state = {
   clockPreset: resolveClockPreset(localStorage.getItem(STORAGE_KEYS.clockPreset)),
   clockMode: resolveClockMode(localStorage.getItem(STORAGE_KEYS.clockMode)),
   clockMoveSig: '',
+  session: 'setup',
   requestTimer: null,
   typingResumeTimer: null,
   moveNumberPrimeTimer: null,
@@ -148,6 +149,10 @@ const state = {
     humanSide: null,
     cpuSide: null,
     tossing: false,
+    tossId: 0,
+    coinFace: null,
+    pausedThinkMs: null,
+    matchStarted: false,
     thinking: false,
     requestId: 0,
     lastThoughtFen: null,
@@ -193,7 +198,13 @@ const elements = {
   clockReset: document.querySelector('#clock-reset'),
   clockHint: document.querySelector('#clock-hint'),
   renderForm: document.querySelector('#render-form'),
+  newBoard: document.querySelector('#new-board'),
   newGame: document.querySelector('#new-game'),
+  startGame: document.querySelector('#start-game'),
+  pauseGame: document.querySelector('#pause-game'),
+  pauseVeil: document.querySelector('#pause-veil'),
+  resumeGame: document.querySelector('#resume-game'),
+  pauseNewBoard: document.querySelector('#pause-new-board'),
   flipBoard: document.querySelector('#flip-board'),
   copyPgn: document.querySelector('#copy-pgn'),
   shareLink: document.querySelector('#share-link'),
@@ -354,16 +365,40 @@ function sideLabel(side) {
   return side === 'white' ? names.white : names.black;
 }
 
+function paintCoin() {
+  const { tossing, humanSide, coinFace } = state.cpu;
+  if (elements.coin && coinFace) {
+    elements.coin.dataset.face = coinFace;
+  }
+  elements.coinStage?.classList.toggle('is-spinning', tossing);
+  elements.coinStage?.classList.toggle('is-resolved', Boolean(coinFace) && !tossing);
+  if (!elements.coinCaption) {
+    return;
+  }
+  if (tossing) {
+    elements.coinCaption.textContent = 'Heads: you play White. Tails: CPU plays White.';
+    return;
+  }
+  if (humanSide && coinFace) {
+    const faceLabel = coinFace === 'heads' ? 'Heads' : 'Tails';
+    elements.coinCaption.textContent = `${faceLabel}! You play ${sideLabel(humanSide)}. Press Start game when you are ready.`;
+    return;
+  }
+  elements.coinCaption.textContent = 'New game tosses a coin. Start game begins the match.';
+}
+
 function paintCpuUi() {
   const { enabled, tossing, thinking, humanSide, levelId, handicap } = state.cpu;
+  const setup = state.session === 'setup';
   elements.cpuPanel?.setAttribute('data-enabled', enabled ? 'true' : 'false');
-  elements.cpuPanel?.classList.toggle('is-thinking', thinking);
+  elements.cpuPanel?.classList.toggle('is-thinking', thinking && state.session === 'live');
   elements.cpuPanel?.classList.toggle('is-tossing', tossing);
   elements.cpuPanel?.classList.toggle('is-pace-on', Boolean(handicap));
 
   if (elements.cpuToggle) {
     elements.cpuToggle.setAttribute('aria-pressed', enabled ? 'true' : 'false');
     elements.cpuToggle.textContent = enabled ? 'CPU on' : 'CPU off';
+    elements.cpuToggle.disabled = tossing || !setup;
   }
   if (elements.cpuControls) {
     elements.cpuControls.hidden = !enabled;
@@ -373,29 +408,23 @@ function paintCpuUi() {
   }
   if (elements.cpuLevel) {
     elements.cpuLevel.value = levelId;
-    elements.cpuLevel.disabled = tossing || thinking;
+    elements.cpuLevel.disabled = tossing || !setup;
   }
   if (elements.cpuNewMatch) {
-    elements.cpuNewMatch.disabled = tossing || thinking;
-  }
-  if (elements.cpuToggle) {
-    elements.cpuToggle.disabled = tossing;
+    elements.cpuNewMatch.disabled = tossing;
   }
   if (elements.cpuHandicap) {
     elements.cpuHandicap.setAttribute('aria-pressed', handicap ? 'true' : 'false');
     elements.cpuHandicap.textContent = handicap ? 'Pace on' : 'Pace off';
-    elements.cpuHandicap.disabled = tossing;
+    elements.cpuHandicap.disabled = tossing || !setup;
   }
   updateCpuHandicapHint();
+  paintCoin();
 
   if (!enabled) {
     if (elements.cpuStatus) {
       elements.cpuStatus.textContent = '';
     }
-    if (elements.coinCaption) {
-      elements.coinCaption.textContent = 'Coin toss decides who plays White.';
-    }
-    elements.coinStage?.classList.remove('is-spinning', 'is-resolved');
     notifyLessons();
     return;
   }
@@ -404,16 +433,27 @@ function paintCpuUi() {
     if (elements.cpuStatus) {
       elements.cpuStatus.textContent = 'Tossing for White…';
     }
-    if (elements.coinCaption) {
-      elements.coinCaption.textContent = 'Heads: you play White. Tails: CPU plays White.';
+    notifyLessons();
+    return;
+  }
+
+  if (!state.cpu.matchStarted) {
+    if (elements.cpuStatus) {
+      if (!setup) {
+        elements.cpuStatus.textContent = 'Press New game to toss for a match. Start game begins it.';
+      } else if (humanSide) {
+        elements.cpuStatus.textContent = `You have ${sideLabel(humanSide)}. Set lessons and the clock, then press Start game.`;
+      } else {
+        elements.cpuStatus.textContent = 'Press New game to toss for sides. The match starts only when you press Start game.';
+      }
     }
     notifyLessons();
     return;
   }
 
-  if (!humanSide) {
+  if (state.session === 'paused') {
     if (elements.cpuStatus) {
-      elements.cpuStatus.textContent = 'Start a match to toss for sides.';
+      elements.cpuStatus.textContent = 'Paused. The board stays covered until you resume.';
     }
     notifyLessons();
     return;
@@ -485,7 +525,7 @@ function recordHumanThinkTime(elapsedMs) {
  * Track how long the human spends on each turn so the CPU can match that pace.
  */
 function syncHumanTurnTiming(game, previousMoveCount, previousTurn) {
-  if (!state.cpu.enabled || !state.cpu.humanSide || state.cpu.tossing) {
+  if (!state.cpu.enabled || !state.cpu.humanSide || state.cpu.tossing || state.session !== 'live') {
     return;
   }
 
@@ -516,6 +556,11 @@ function syncHumanTurnTiming(game, previousMoveCount, previousTurn) {
 }
 
 function setCpuHandicap(enabled) {
+  if (state.session !== 'setup') {
+    setFeedback('Pace is chosen before the game starts.', true);
+    paintCpuUi();
+    return;
+  }
   state.cpu.handicap = Boolean(enabled);
   localStorage.setItem(STORAGE_KEYS.cpuHandicap, state.cpu.handicap ? '1' : '0');
   paintCpuUi();
@@ -543,35 +588,49 @@ async function setCpuEnabled(enabled) {
   if (enabled === state.cpu.enabled) {
     return;
   }
+  if (state.session !== 'setup') {
+    setFeedback('The opponent is fixed once the game starts. Press New game to change it.', true);
+    paintSession();
+    return;
+  }
 
   if (!enabled) {
+    state.cpu.tossId += 1;
     cancelCpuSearch();
     state.cpu.enabled = false;
     state.cpu.humanSide = null;
     state.cpu.cpuSide = null;
+    state.cpu.coinFace = null;
     state.cpu.tossing = false;
+    state.cpu.matchStarted = false;
     resetCpuPaceTracking();
-    paintCpuUi();
-    setFeedback('CPU player turned off. Notation-only mode.');
+    paintSession();
+    setFeedback('CPU player turned off.');
     return;
   }
 
   state.cpu.enabled = true;
-  paintCpuUi();
+  paintSession();
   setFeedback('Loading Stockfish…');
   try {
     await stockfish.applyLevel(state.cpu.levelId);
   } catch (error) {
     state.cpu.enabled = false;
-    paintCpuUi();
+    paintSession();
     setFeedback(error.message || 'Could not start Stockfish in this browser.', true);
     return;
   }
 
-  await startCpuMatch({ announceEngine: false });
+  paintSession();
+  setFeedback('CPU is on. Press New game to toss for sides. Stockfish waits until you press Start game.');
 }
 
 async function applyCpuLevel(levelId) {
+  if (state.session !== 'setup') {
+    paintCpuUi();
+    setFeedback('Strength is chosen before the game starts.', true);
+    return;
+  }
   const next = resolveCpuLevel(levelId);
   state.cpu.levelId = next;
   localStorage.setItem(STORAGE_KEYS.cpuLevel, next);
@@ -589,89 +648,269 @@ async function applyCpuLevel(levelId) {
   }
 }
 
-async function startCpuMatch({ announceEngine = true } = {}) {
-  if (!state.cpu.enabled) {
-    return;
-  }
+function clockSettings() {
+  const preset = CLOCK_PRESETS[state.clockPreset];
+  return {
+    baseMs: preset.baseMs,
+    incrementMs: preset.incrementMs,
+    mode: state.clockMode,
+  };
+}
 
+function clearToSetup() {
+  state.cpu.tossId += 1;
+  state.session = 'setup';
+  state.offerCoaching = true;
+  state.cpu.tossing = false;
+  state.cpu.humanSide = null;
+  state.cpu.cpuSide = null;
+  state.cpu.coinFace = null;
+  state.cpu.pausedThinkMs = null;
+  state.cpu.matchStarted = false;
   cancelCpuSearch();
   resetCpuPaceTracking();
+  state.clockMoveSig = '';
+  elements.moves.value = '';
+  elements.saveName.value = '';
+  lessons?.exitPreview();
+  clearLift();
+  hidePromotionPicker();
+  stopReplayPlayback();
+  clock.configure(clockSettings());
+  updateBoard('', false, { skipCpu: true });
+  paintSession();
+}
+
+async function tossForSides() {
+  if (!state.cpu.enabled || state.session !== 'setup') {
+    return;
+  }
+  const tossId = state.cpu.tossId;
   state.cpu.tossing = true;
   state.cpu.humanSide = null;
   state.cpu.cpuSide = null;
-  paintCpuUi();
-
-  elements.moves.value = '';
-  elements.saveName.value = '';
-  state.clockMoveSig = '';
-  state.offerCoaching = true;
-  clock.reset();
-  updateBoard('', false, { skipCpu: true });
-
-  elements.coinStage?.classList.remove('is-resolved');
-  elements.coinStage?.classList.add('is-spinning');
-  if (elements.coin) {
-    elements.coin.dataset.face = 'heads';
-  }
-  if (elements.coinCaption) {
-    elements.coinCaption.textContent = 'Heads: you play White. Tails: CPU plays White.';
-  }
+  state.cpu.coinFace = null;
+  paintSession();
 
   const result = await tossCoinForSides({ delayMs: 1500 });
-  if (!state.cpu.enabled) {
+  if (tossId !== state.cpu.tossId || !state.cpu.enabled || state.session !== 'setup') {
+    if (state.cpu.tossing && tossId === state.cpu.tossId) {
+      state.cpu.tossing = false;
+      paintSession();
+    }
     return;
   }
 
   state.cpu.humanSide = result.humanSide;
   state.cpu.cpuSide = result.cpuSide;
+  state.cpu.coinFace = result.face;
   state.cpu.tossing = false;
-
-  if (elements.coin) {
-    elements.coin.dataset.face = result.face;
-  }
-  elements.coinStage?.classList.remove('is-spinning');
-  elements.coinStage?.classList.add('is-resolved');
-
-  // Human sits at the near side of the board.
   setBoardFlipped(result.humanSide === 'black');
-
+  paintSession();
   const humanName = sideLabel(result.humanSide);
   const faceLabel = result.face === 'heads' ? 'Heads' : 'Tails';
-  if (elements.coinCaption) {
-    elements.coinCaption.textContent = `${faceLabel}! You play ${humanName}.`;
+  setFeedback(`${faceLabel} — you are ${humanName}. Set lessons and the clock, then press Start game.`);
+}
+
+async function newGame() {
+  clearToSetup();
+  if (state.cpu.enabled) {
+    await tossForSides();
+    return;
+  }
+  setFeedback('New game. Set the clock and lessons, then press Start game.');
+}
+
+function newBoard() {
+  const cpuOn = state.cpu.enabled;
+  clearToSetup();
+  setFeedback(cpuOn
+    ? 'New board. Press New game when you want a coin toss. Start game begins the match.'
+    : 'New board. Set the clock and lessons, then press Start game.');
+}
+
+async function beginGame() {
+  if (state.session !== 'setup' || state.cpu.tossing) {
+    return;
+  }
+  if (state.cpu.enabled && !state.cpu.humanSide) {
+    setFeedback('Press New game to toss for sides. Start game comes after the coin.', true);
+    paintSession();
+    return;
   }
 
-  paintCpuUi();
-  if (announceEngine) {
-    setFeedback(`${faceLabel} — you are ${humanName}. Type a move or click pieces; Stockfish replies.`);
-  } else {
-    setFeedback(`${faceLabel} — you are ${humanName}. Stockfish is ready.`);
+  state.session = 'live';
+  state.cpu.matchStarted = Boolean(state.cpu.enabled && state.cpu.humanSide);
+  if (state.clockMode !== 'off') {
+    const side = state.game?.turn === 'black' ? 'black' : 'white';
+    clock.press(side);
+    state.clockMoveSig = moveNumberSignature(elements.moves.value);
+  }
+  paintSession();
+
+  if (!state.cpu.enabled) {
+    setFeedback('Game started.');
+    return;
+  }
+
+  if (state.cpu.humanSide === 'white') {
+    state.cpu.humanTurnStartedAt = performance.now();
+    state.cpu.humanTurnStartMoveCount = state.game?.moveCount ?? 0;
   }
 
   try {
     await stockfish.newGame();
   } catch (error) {
-    if (!state.cpu.enabled) {
+    if (state.session !== 'live' || !state.cpu.enabled) {
       return;
     }
-    setFeedback(error.message || 'CPU failed to start a new game.', true);
+    setFeedback(error.message || 'CPU failed to start.', true);
     return;
   }
-  if (!state.cpu.enabled) {
+  if (state.session !== 'live' || !state.cpu.enabled) {
     return;
   }
 
-  // Start human think clock if they go first.
-  if (result.humanSide === 'white') {
-    state.cpu.humanTurnStartedAt = performance.now();
-    state.cpu.humanTurnStartMoveCount = 0;
-  }
-
+  const humanName = sideLabel(state.cpu.humanSide);
+  setFeedback(`Game started. You play ${humanName}.`);
   maybeRequestCpuMove(state.game);
 }
 
+function pauseGame() {
+  if (state.session !== 'live' || state.game?.isGameOver) {
+    return;
+  }
+  state.session = 'paused';
+  if (state.cpu.humanTurnStartedAt != null) {
+    state.cpu.pausedThinkMs = performance.now() - state.cpu.humanTurnStartedAt;
+    state.cpu.humanTurnStartedAt = null;
+  }
+  clock.pause();
+  cancelCpuSearch();
+  stopReplayPlayback();
+  clearLift();
+  hidePromotionPicker();
+  lessons?.exitPreview();
+  paintSession();
+  elements.resumeGame?.focus();
+  setFeedback('Paused. The board stays covered until you resume.');
+}
+
+function resumeGame() {
+  if (state.session !== 'paused') {
+    return;
+  }
+  state.session = 'live';
+  clock.setTypingPaused(false);
+  if (state.clockMode !== 'off' && !clock.flagged) {
+    const side = state.game?.turn === 'black' ? 'black' : 'white';
+    if (!clock.active) {
+      clock.setActive(side, { start: true });
+    } else {
+      clock.ensureRunning();
+    }
+  }
+  if (state.cpu.enabled && state.cpu.humanSide && state.game?.turn === state.cpu.humanSide) {
+    const held = state.cpu.pausedThinkMs || 0;
+    state.cpu.humanTurnStartedAt = performance.now() - held;
+    state.cpu.humanTurnStartMoveCount = state.game.moveCount;
+  }
+  state.cpu.pausedThinkMs = null;
+  paintSession();
+  maybeRequestCpuMove(state.game);
+  setFeedback('Game resumed.');
+}
+
+function paintSession() {
+  const setup = state.session === 'setup';
+  const paused = state.session === 'paused';
+  const live = state.session === 'live';
+  document.body.classList.toggle('is-game-setup', setup);
+  document.body.classList.toggle('is-game-paused', paused);
+  document.body.classList.toggle('is-game-live', live);
+  if (elements.pauseVeil) {
+    elements.pauseVeil.hidden = !paused;
+  }
+  if (elements.startGame) {
+    const needsToss = Boolean(state.cpu.enabled && !state.cpu.humanSide);
+    elements.startGame.hidden = !setup;
+    elements.startGame.disabled = state.cpu.tossing || needsToss;
+    elements.startGame.title = needsToss
+      ? 'Press New game to toss for sides, then start.'
+      : 'Start the game. The clock and lessons lock in.';
+  }
+  if (elements.pauseGame) {
+    const over = Boolean(state.game?.isGameOver);
+    elements.pauseGame.hidden = setup || over;
+    elements.pauseGame.textContent = paused ? 'Resume' : 'Pause';
+    elements.pauseGame.setAttribute('aria-pressed', paused ? 'true' : 'false');
+  }
+  if (elements.newGame) {
+    elements.newGame.disabled = state.cpu.tossing;
+  }
+  if (elements.newBoard) {
+    elements.newBoard.disabled = state.cpu.tossing;
+  }
+  const clockLocked = !setup;
+  if (elements.clockPreset) {
+    elements.clockPreset.disabled = clockLocked;
+  }
+  if (elements.clockMode) {
+    elements.clockMode.disabled = clockLocked;
+  }
+  if (elements.clockReset) {
+    elements.clockReset.disabled = clockLocked;
+  }
+  paintCpuUi();
+  if (state.game?.board) {
+    paintBoardBanner(state.game);
+  }
+}
+
+function canPlayMoves() {
+  if (state.session === 'paused') {
+    setFeedback('Resume to move. The board stays covered while the game is paused.', true);
+    return false;
+  }
+  if (state.session !== 'live') {
+    setFeedback('Press Start game after the clock and lessons are set.', true);
+    return false;
+  }
+  return true;
+}
+
+function notationChangeAllowed() {
+  if (state.session === 'live') {
+    return true;
+  }
+  const next = elements.moves.value;
+  let count = null;
+  try {
+    count = renderGame(next).moveCount;
+  } catch {
+    count = null;
+  }
+  if (state.session === 'paused') {
+    elements.moves.value = state.draft ?? '';
+    setFeedback('Resume to change the moves. The board stays covered while paused.', true);
+    return false;
+  }
+  if (count != null && count > 1) {
+    state.session = 'live';
+    state.offerCoaching = false;
+    state.cpu.matchStarted = false;
+    return true;
+  }
+  if (count === 1) {
+    elements.moves.value = '';
+    setFeedback('Press Start game before the first move.', true);
+    return false;
+  }
+  return true;
+}
+
 async function maybeRequestCpuMove(game) {
-  if (!state.cpu.enabled || state.cpu.tossing || !state.cpu.cpuSide) {
+  if (state.session !== 'live' || !state.cpu.enabled || !state.cpu.matchStarted || state.cpu.tossing || !state.cpu.cpuSide) {
     return;
   }
   if (!game || game.isGameOver) {
@@ -805,10 +1044,17 @@ function paintClock(snapshot = clock.snapshot()) {
     snapshot,
     names,
   );
-  document.getElementById('clock-panel')?.classList.toggle('is-typing-paused', snapshot.typingPaused);
+  const panel = document.getElementById('clock-panel');
+  panel?.classList.toggle('is-typing-paused', snapshot.typingPaused);
+  panel?.classList.toggle('is-off', snapshot.mode === 'off');
+  panel?.classList.toggle('is-paused', state.session === 'paused');
 }
 
 function applyClockPreset(presetId) {
+  if (state.session !== 'setup') {
+    elements.clockPreset.value = state.clockPreset;
+    return;
+  }
   const id = resolveClockPreset(presetId);
   state.clockPreset = id;
   localStorage.setItem(STORAGE_KEYS.clockPreset, id);
@@ -824,6 +1070,10 @@ function applyClockPreset(presetId) {
 }
 
 function applyClockMode(modeId) {
+  if (state.session !== 'setup') {
+    elements.clockMode.value = state.clockMode;
+    return;
+  }
   const mode = resolveClockMode(modeId);
   state.clockMode = mode;
   localStorage.setItem(STORAGE_KEYS.clockMode, mode);
@@ -839,6 +1089,9 @@ function applyClockMode(modeId) {
 }
 
 function resetClock() {
+  if (state.session !== 'setup') {
+    return;
+  }
   clock.configure({
     baseMs: CLOCK_PRESETS[state.clockPreset].baseMs,
     incrementMs: CLOCK_PRESETS[state.clockPreset].incrementMs,
@@ -854,6 +1107,9 @@ function resetClock() {
  * Live: each completed half-move hands the clock to the side to move.
  */
 function syncClockFromNotation(text, game, { force = false, previousMoveCount = null } = {}) {
+  if (state.session !== 'live' || state.clockMode === 'off') {
+    return;
+  }
   const signature = moveNumberSignature(text);
   const signatureChanged = signature !== state.clockMoveSig;
 
@@ -1264,19 +1520,33 @@ function paintBoardBanner(game) {
   frame.style.setProperty('--turn-stroke', palette.stroke);
   paintClock();
 
-  const signature = `${situation.tone}|${situation.banner}|${situation.side}|${state.piecePalette}`;
+  let bannerText = situation.banner;
+  if (state.session === 'setup') {
+    if (state.cpu.enabled && state.cpu.tossing) {
+      bannerText = 'Tossing for colors…';
+    } else if (state.cpu.enabled && !state.cpu.humanSide) {
+      bannerText = 'Press New game to toss a coin, then Start game.';
+    } else if (state.cpu.enabled && state.cpu.humanSide) {
+      bannerText = 'Colors are set. Press Start game when you are ready.';
+    } else {
+      bannerText = 'Set the clock and lessons, then press Start game.';
+    }
+  } else if (state.session === 'paused') {
+    bannerText = 'Paused';
+  }
+  const signature = `${state.session}|${situation.tone}|${bannerText}|${situation.side}|${state.piecePalette}`;
   if (banner.dataset.signature === signature) {
     return;
   }
   banner.dataset.signature = signature;
-  banner.dataset.tone = situation.tone;
+  banner.dataset.tone = state.session === 'setup' ? 'setup' : situation.tone;
 
   const pip = document.createElement('span');
   pip.className = 'board-banner-pip';
   pip.setAttribute('aria-hidden', 'true');
   const text = document.createElement('span');
   text.className = 'board-banner-text';
-  text.textContent = situation.banner;
+  text.textContent = bannerText;
   banner.replaceChildren(pip, text);
 
   const announce = situation.tone === 'check' || situation.tone === 'checkmate' || situation.tone === 'draw';
@@ -1617,10 +1887,8 @@ async function paintGame(game, {
 
   if (!skipCpu && isViewingLive()) {
     maybeRequestCpuMove(state.fullGame);
-  } else {
-    paintCpuUi();
   }
-  notifyLessons();
+  paintSession();
 }
 
 /** True when movetext already ends with `N. ` (space after the period) for White. */
@@ -1644,7 +1912,7 @@ function queueNextMoveNumberPrime(game, previousMoveCount) {
   clearTimeout(state.moveNumberPrimeTimer);
   state.moveNumberPrimeTimer = null;
 
-  if (!game || game.isGameOver || game.moveCount === 0) {
+  if (state.session !== 'live' || !game || game.isGameOver || game.moveCount === 0) {
     return;
   }
   // Black just finished a full turn (even half-move count, White to move).
@@ -1944,6 +2212,10 @@ async function openSharedGame(moves, {
   feedback = 'Playing shared game…',
 } = {}) {
   const text = String(moves ?? '');
+  state.cpu.tossId += 1;
+  state.cpu.tossing = false;
+  state.cpu.matchStarted = false;
+  state.session = text.trim() ? 'live' : 'setup';
   state.offerCoaching = !text.trim();
   elements.moves.value = text;
   state.draft = text;
@@ -2046,19 +2318,6 @@ function drawSavedGames() {
       `,
     )
     .join('');
-}
-
-function resetBoard() {
-  if (state.cpu.enabled) {
-    startCpuMatch();
-    return;
-  }
-  elements.moves.value = '';
-  elements.saveName.value = '';
-  state.clockMoveSig = '';
-  state.offerCoaching = true;
-  clock.reset();
-  updateBoard('', true);
 }
 
 async function copyNotation() {
@@ -2353,6 +2612,9 @@ async function choosePromotion(type) {
 }
 
 async function placeOrLift(square) {
+  if (!canPlayMoves()) {
+    return;
+  }
   if (state.lessonPreview) {
     setFeedback('This is a lesson preview. Go back to the game, or press Play, before moving a piece.', true);
     return;
@@ -2439,6 +2701,8 @@ function lessonContext() {
     lastMove,
     live: isViewingLive(),
     offerCoaching: state.offerCoaching,
+    gameStarted: state.session === 'live' || state.session === 'paused',
+    paused: state.session === 'paused',
     cpu: {
       enabled: state.cpu.enabled,
       thinking: state.cpu.thinking,
@@ -2486,6 +2750,9 @@ function hideLessonPreview({ restore = true } = {}) {
 }
 
 async function playLessonMove(san) {
+  if (!canPlayMoves()) {
+    return;
+  }
   clearTimeout(state.requestTimer);
   let game;
   try {
@@ -2522,10 +2789,19 @@ async function playLessonMove(san) {
 function bindEvents() {
   elements.renderForm.addEventListener('submit', (event) => {
     event.preventDefault();
+    if (!notationChangeAllowed() || state.session !== 'live') {
+      if (state.session !== 'live') {
+        setFeedback('Press Start game before rendering moves.', true);
+      }
+      return;
+    }
     updateBoard(elements.moves.value, true);
   });
 
   elements.moves.addEventListener('input', () => {
+    if (!notationChangeAllowed()) {
+      return;
+    }
     queueLiveRender();
     scheduleKeyboardFit();
   });
@@ -2547,7 +2823,22 @@ function bindEvents() {
   elements.clockPreset.addEventListener('change', (event) => applyClockPreset(event.target.value));
   elements.clockMode.addEventListener('change', (event) => applyClockMode(event.target.value));
   elements.clockReset.addEventListener('click', resetClock);
-  elements.newGame.addEventListener('click', resetBoard);
+  elements.newBoard?.addEventListener('click', newBoard);
+  elements.newGame.addEventListener('click', () => {
+    newGame();
+  });
+  elements.startGame?.addEventListener('click', () => {
+    beginGame();
+  });
+  elements.pauseGame?.addEventListener('click', () => {
+    if (state.session === 'paused') {
+      resumeGame();
+      return;
+    }
+    pauseGame();
+  });
+  elements.resumeGame?.addEventListener('click', resumeGame);
+  elements.pauseNewBoard?.addEventListener('click', newBoard);
   elements.flipBoard?.addEventListener('click', () => setBoardFlipped(!state.flipped));
   elements.clickMoves?.addEventListener('click', () => setClickMoves(!state.clickMoves));
   elements.board?.addEventListener('click', (event) => {
@@ -2576,6 +2867,10 @@ function bindEvents() {
       || event.target instanceof HTMLInputElement
       || event.target instanceof HTMLTextAreaElement
       || event.target instanceof HTMLSelectElement;
+    if (event.key === 'Escape' && state.session === 'paused' && !typing) {
+      resumeGame();
+      return;
+    }
     if (event.key === 'Escape' && state.lessonPreview && !typing) {
       lessons?.exitPreview();
       return;
@@ -2638,7 +2933,9 @@ function bindEvents() {
   elements.cpuHandicap?.addEventListener('click', () => {
     setCpuHandicap(!state.cpu.handicap);
   });
-  elements.cpuNewMatch?.addEventListener('click', () => startCpuMatch());
+  elements.cpuNewMatch?.addEventListener('click', () => {
+    newGame();
+  });
 
   window.matchMedia('(max-width: 800px)').addEventListener('change', syncBoardExtrasDisclosure);
 
@@ -2672,7 +2969,12 @@ function bindEvents() {
         return;
       }
       elements.saveName.value = game.name;
+      state.cpu.tossId += 1;
+      state.cpu.tossing = false;
+      state.cpu.matchStarted = false;
+      cancelCpuSearch();
       state.offerCoaching = !String(game.moves || '').trim();
+      state.session = String(game.moves || '').trim() ? 'live' : 'setup';
       elements.moves.value = game.moves;
       updateBoard(game.moves, true);
       return;
@@ -2703,8 +3005,17 @@ function bootstrap() {
 
   const sharedMoves = loadMovesFromShareLocation();
   const initialMoves = sharedMoves != null ? sharedMoves : state.draft;
-  state.offerCoaching = !String(initialMoves || '').trim();
-  elements.moves.value = initialMoves;
+  const opening = String(initialMoves || '');
+  state.offerCoaching = !opening.trim();
+  state.session = opening.trim() ? 'live' : 'setup';
+  elements.moves.value = opening;
+  try {
+    const loaded = renderGame(opening);
+    state.game = loaded;
+    state.fullGame = loaded;
+  } catch {
+    // updateBoard reports the notation error after boot.
+  }
   if (sharedMoves != null) {
     state.draft = sharedMoves;
   }

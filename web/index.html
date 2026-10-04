@@ -60,7 +60,12 @@
           >
             Click to move
           </button>
-          <button id="new-game" type="button" class="button ghost">New board</button>
+        </div>
+        <div class="board-actions game-actions">
+          <button id="new-board" type="button" class="button ghost">New board</button>
+          <button id="new-game" type="button" class="button ghost" title="Clear the board. With the CPU on, this tosses a coin and waits.">New game</button>
+          <button id="start-game" type="button" class="button primary">Start game</button>
+          <button id="pause-game" type="button" class="button ghost" hidden>Pause</button>
         </div>
       </div>
 
@@ -85,6 +90,7 @@
             <select id="clock-mode" aria-label="Clock mode">
               <option value="live">Live</option>
               <option value="notation" selected>Notation pause</option>
+              <option value="off">Off</option>
             </select>
           </label>
           <button id="clock-reset" type="button" class="button ghost">Reset clock</button>
@@ -126,7 +132,7 @@
           <button type="button" class="button ghost" id="lessons-seat-self" data-seat="self" hidden aria-pressed="false">Your coach: off</button>
         </div>
         <p id="lessons-intro" class="lessons-intro">
-          Two players each choose a coach before the first move. The buttons stay on the board so both of you can see who has one, and they lock once the game starts. Against the CPU, choose your own coach before the match starts. The coach never moves a piece. Free in this browser: no account, no ads, no tracking.
+          Two players each choose a coach before pressing Start game. The buttons stay on the board so both of you can see who has one, and they lock when the game starts. Against the CPU, toss a coin, choose your coach and the clock, then press Start game. The CPU does not move until then. The coach never moves a piece. Free in this browser: no account, no ads, no tracking.
         </p>
         <div id="lessons-decision" class="lessons-decision" hidden></div>
         <div id="lessons-body" hidden>
@@ -198,7 +204,7 @@
               Match your average think time (Mario Kart–style clock evening). On by default.
             </p>
           </div>
-          <button id="cpu-new-match" type="button" class="button primary">New match (coin toss)</button>
+          <button id="cpu-new-match" type="button" class="button primary">New game (coin toss)</button>
         </div>
 
         <div class="cpu-match" id="cpu-match" hidden>
@@ -207,7 +213,7 @@
               <div class="coin-face coin-heads">H</div>
               <div class="coin-face coin-tails">T</div>
             </div>
-            <p class="coin-caption" id="coin-caption">Coin toss decides who plays White.</p>
+            <p class="coin-caption" id="coin-caption">New game tosses a coin. Start game begins the match.</p>
           </div>
           <p class="cpu-status" id="cpu-status" role="status"></p>
         </div>
@@ -312,15 +318,17 @@
           <li>Also accepted: numbered half-moves (<code>1. e4 2. e5 3. Nf3</code>), repeated turn numbers (<code>1. e4 1. e5</code>), or Black dots (<code>1... e5</code>).</li>
           <li>Legacy coordinates: <code>Pf2f4</code>, <code>Nb8c6</code>.</li>
           <li>Captures show beside the board with a running material score.</li>
+          <li><strong>Start game</strong> begins the match. New board clears the position and stays in setup. New game does the same, and with the CPU on it tosses a coin first. Nothing plays — including the CPU — until you press Start game, so the clock and lessons can be set first.</li>
+          <li><strong>Clock</strong> time, Live, Notation pause, or Off are chosen before Start game and then lock. <strong>Pause</strong> stops the clock and covers the board, moves, and lessons until Resume.</li>
           <li><strong>Notation pause</strong> clock: typing pauses the timer; typing a move number (<code>1.</code>, <code>2.</code>, <code>1...</code>) presses the clock for the side to move. Edit freely until then.</li>
-          <li><strong>Live</strong> clock: follows each completed move and keeps running while you type.</li>
+          <li><strong>Live</strong> clock: follows each completed move and keeps running while you type. <strong>Off</strong> plays with no clock.</li>
           <li>Flip the board for couch co-op without turning the device.</li>
           <li><strong>Share</strong> copies a link with the current notation encoded in the URL hash. Opening that link loads the game from the start and autoplays to the end.</li>
           <li><strong>Click to move</strong> (on by default): click a piece to lift it, then click a highlighted square to place it. The moves box fills in the SAN, including the move number, as each piece lands. Press Escape or click the piece again to put it down. Promotion asks for a piece. Turn the button off to type notation only.</li>
           <li><strong>Play controls</strong> under the board step through or autoplay the game; pieces glide into place (also during live notation updates).</li>
           <li><strong>Check, checkmate, and turn</strong> stay on the board. The side to move is named above the squares, with a colored bar on that side’s edge. Check lights the king; checkmate stamps the result across the board.</li>
-          <li><strong>CPU player</strong> (off by default): toss a coin for White, then type or click your moves — Stockfish replies automatically. Strength from Intermediate upward is Stockfish’s own UCI Elo (1320–2500). Beginner and Casual are approximate: they play the 1320 engine and replace some moves with a random legal move, because Stockfish cannot aim below 1320. Maximum is uncapped lite Stockfish. <strong>Pace</strong> (on by default) makes the CPU take about your average think time so the clocks stay even; turn it off to reply as soon as the search finishes.</li>
-          <li><strong>Lessons</strong> (off by default): a second Stockfish that never plays. With two players, each side turns a coach on before the first move. Both players see who has one, and it cannot be turned on after the game starts. Against the CPU, choose your coach before the match starts. The coach explains tries with chess ideas (development, pins, outposts, pawn breaks, opposition) and lets you preview the line. Press <strong>Play</strong> only when you want that move written into the game. Glance, Study, and Master class are chosen with the coach, before the first move. Everything stays in this browser.</li>
+          <li><strong>CPU player</strong> (off by default): press <strong>New game</strong> to toss a coin for White. Stockfish does not reply until you press <strong>Start game</strong>. Strength from Intermediate upward is Stockfish’s own UCI Elo (1320–2500). Beginner and Casual are approximate: they play the 1320 engine and replace some moves with a random legal move, because Stockfish cannot aim below 1320. Maximum is uncapped lite Stockfish. <strong>Pace</strong> (on by default) makes the CPU take about your average think time so the clocks stay even; turn it off to reply as soon as the search finishes.</li>
+          <li><strong>Lessons</strong> (off by default): a second Stockfish that never plays. With two players, each side turns a coach on before Start game. Both players see who has one, and it cannot be turned on after the game starts. Against the CPU, choose your coach after the coin toss and before Start game. The coach explains tries with chess ideas (development, pins, outposts, pawn breaks, opposition) and lets you preview the line. Press <strong>Play</strong> only when you want that move written into the game. Glance, Study, and Master class are chosen with the coach, before the game starts. Everything stays in this browser.</li>
         </ul>
       </details>
     </section>
@@ -338,5 +346,15 @@
   </footer>
 
   <script type="module" src="app.js"></script>
+  <div id="pause-veil" class="pause-veil" hidden>
+    <div class="pause-card" role="dialog" aria-modal="true" aria-labelledby="pause-title">
+      <p id="pause-title" class="pause-kicker">Paused</p>
+      <p>The board, moves, and lessons stay covered until you resume.</p>
+      <div class="pause-card-actions">
+        <button id="resume-game" type="button" class="button primary">Resume</button>
+        <button id="pause-new-board" type="button" class="button ghost">New board</button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>

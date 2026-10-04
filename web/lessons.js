@@ -61,6 +61,23 @@ export function advanceCoaching(state, ctx, enrollment) {
     };
   }
   if (sans.length === 0) {
+    if (ctx.gameStarted && (previous.phase === 'setup' || previous.phase === 'playing')) {
+      if (previous.phase === 'playing') {
+        return {
+          phase: 'playing',
+          enrolled: previous.enrolled || emptySeats(),
+          sans: [],
+        };
+      }
+      return {
+        phase: 'playing',
+        enrolled: {
+          white: Boolean(enrollment?.white),
+          black: Boolean(enrollment?.black),
+        },
+        sans: [],
+      };
+    }
     if (ctx.offerCoaching) {
       return { phase: 'setup', enrolled: emptySeats(), sans: [] };
     }
@@ -133,27 +150,27 @@ export function agreementText({ phase, enrolled, cpu, sideNames }) {
   const white = sideNames?.white || 'White';
   const black = sideNames?.black || 'Black';
   if (phase === 'studying') {
-    return 'This board already has moves. Coaching is chosen on a new board, before the first move, so both players can see it.';
+    return 'This board already has moves. Coaching is chosen on a new board, before Start game, so both players can see it.';
   }
   if (phase === 'setup') {
     if (cpu?.enabled) {
       if (cpu.tossing) {
-        return 'Tossing for colors. Turn your coach on or off before the first move. That choice stays on the board for the match.';
+        return 'Tossing for colors. Turn your coach on or off, then press Start game. The CPU waits until then.';
       }
       if (cpu.humanSide === 'white' || cpu.humanSide === 'black') {
         const you = cpu.humanSide === 'black' ? black : white;
-        return `You have ${you}. Turn your coach on or off before the first move. The choice stays on the board once the match starts.`;
+        return `You have ${you}. Turn your coach on or off, then press Start game. The CPU does not move until the game starts.`;
       }
-      return 'Turn your coach on before the first move. The choice stays on the board for the whole match.';
+      return 'Press New game to toss for colors. Turn your coach on before Start game. The CPU waits until the game starts.';
     }
-    return `Before the first move, ${white} and ${black} each choose a coach. Both players can see the choice. It cannot be turned on after the game starts.`;
+    return `Before Start game, ${white} and ${black} each choose a coach. Both players can see the choice. It locks when the game starts.`;
   }
   if (cpu?.enabled) {
     const human = cpu.humanSide;
     const on = human && enrolled?.[human];
     return on
-      ? 'You are using the coach this match. That was set before the first move.'
-      : 'You are playing this match without a coach. That was set before the first move.';
+      ? 'You are using the coach this match. That was set before the game started.'
+      : 'You are playing this match without a coach. That was set before the game started.';
   }
   const whiteOn = Boolean(enrolled?.white);
   const blackOn = Boolean(enrolled?.black);
@@ -161,11 +178,11 @@ export function agreementText({ phase, enrolled, cpu, sideNames }) {
     return `${white} and ${black} are both using the coach. Tries show for the side to move. Both players can see this.`;
   }
   if (!whiteOn && !blackOn) {
-    return 'Neither player is using the coach. That was set before the first move.';
+    return 'Neither player is using the coach. That was set before the game started.';
   }
   const using = whiteOn ? white : black;
   const plain = whiteOn ? black : white;
-  return `${using} is using the coach. ${plain} is not. Both players can see this. It was set before the first move.`;
+  return `${using} is using the coach. ${plain} is not. Both players can see this. It was set before the game started.`;
 }
 
 function escapeHtml(value) {
@@ -346,8 +363,8 @@ export function mountLessonPortal({ onPreview, onClearPreview, onPlayMove, getCo
     button.setAttribute('aria-pressed', pressed ? 'true' : 'false');
     button.textContent = label;
     button.title = locked
-      ? 'Coaching is chosen before the first move.'
-      : 'Both players can see this choice.';
+      ? 'Coaching was set before the game started.'
+      : 'Both players can see this choice. It locks when the game starts.';
   }
 
   function stopWatch() {
@@ -520,7 +537,7 @@ export function mountLessonPortal({ onPreview, onClearPreview, onPlayMove, getCo
     if (depthHint) {
       const description = current?.description ?? '';
       depthHint.textContent = locked
-        ? `${description} Depth stays as it was before the first move.`
+        ? `${description} Depth stays as it was when the game started.`
         : description;
     }
   }
@@ -752,6 +769,16 @@ export function mountLessonPortal({ onPreview, onClearPreview, onPlayMove, getCo
     const nextPhase = advanceCoaching(portal.phaseState, ctx, offered);
     const enteredStudy = nextPhase.phase === 'studying' && portal.phaseState.phase !== 'studying';
     portal.phaseState = nextPhase;
+
+    if (ctx.paused) {
+      haltSearch();
+      if (portal.preview) {
+        exitPreview({ restore: false });
+      }
+      setStatus('');
+      render(ctx);
+      return;
+    }
 
     if (enteredStudy) {
       haltSearch();

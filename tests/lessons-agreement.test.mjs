@@ -77,13 +77,39 @@ test('stepping through history does not change the agreement', () => {
   assert.deepEqual(reviewing.enrolled, { white: false, black: true });
 });
 
+test('starting the game freezes each coach before any move', () => {
+  const playing = advanceCoaching(setup, {
+    live: true,
+    offerCoaching: true,
+    gameStarted: true,
+    sans: [],
+  }, { white: true, black: false });
+  assert.equal(playing.phase, 'playing');
+  assert.deepEqual(playing.enrolled, { white: true, black: false });
+
+  const moved = advanceCoaching(playing, {
+    live: true,
+    offerCoaching: true,
+    gameStarted: true,
+    sans: ['e4'],
+  }, { white: true, black: true });
+  assert.equal(moved.phase, 'playing');
+  assert.deepEqual(moved.enrolled, { white: true, black: false });
+});
+
 test('two players are told who has a coach', () => {
   const names = { white: 'Ivory', black: 'Ebony' };
   assert.match(agreementText({
     phase: 'setup',
     enrolled: { white: false, black: false },
     sideNames: names,
-  }), /Before the first move/);
+  }), /Before Start game/);
+  assert.match(agreementText({
+    phase: 'setup',
+    enrolled: { white: false, black: false },
+    cpu: { enabled: true, humanSide: 'black', tossing: false },
+    sideNames: names,
+  }), /Start game/);
   assert.match(agreementText({
     phase: 'playing',
     enrolled: { white: true, black: false },

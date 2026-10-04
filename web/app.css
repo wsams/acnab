@@ -543,8 +543,25 @@ code {
 }
 
 .board-toolbar {
+  flex-direction: column;
   align-items: stretch;
+  justify-content: flex-start;
+  gap: 0.45rem;
+}
+
+.game-actions {
   justify-content: flex-end;
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
+}
+
+.lessons-seats .button:disabled,
+.lessons-depth .button:disabled {
+  opacity: 1;
 }
 
 .compact-heading {
@@ -1144,8 +1161,72 @@ textarea {
   line-height: 1.35;
 }
 
-.clock-panel.is-typing-paused .clock-face.is-active {
+.clock-panel.is-typing-paused .clock-face.is-active,
+.clock-panel.is-paused .clock-face.is-active {
   opacity: 0.72;
+}
+
+.clock-panel.is-off .clock-time {
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 1.15rem;
+  opacity: 0.72;
+}
+
+.pause-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: 1.25rem;
+  background: color-mix(in srgb, #0c0a09 42%, transparent);
+}
+
+.pause-veil[hidden] {
+  display: none;
+}
+
+.pause-card {
+  display: grid;
+  justify-items: center;
+  gap: 0.65rem;
+  width: min(100%, 22rem);
+  padding: 1.15rem 1.2rem 1.2rem;
+  border-radius: 1.1rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.pause-kicker {
+  font-family: "Syne", sans-serif;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.pause-card p {
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.pause-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+body.is-game-paused .clock-panel,
+body.is-game-paused .board-layout,
+body.is-game-paused .panel-notation,
+body.is-game-paused .panel-board-meta {
+  filter: blur(16px);
+  pointer-events: none;
+  user-select: none;
 }
 
 .board.is-settling .board-square .piece {
@@ -2295,9 +2376,23 @@ textarea {
     font-size: 1rem;
   }
 
-  .clock-controls,
-  .clock-hint {
+  body.is-game-live .clock-controls,
+  body.is-game-live .clock-hint,
+  body.is-game-paused .clock-controls,
+  body.is-game-paused .clock-hint {
     display: none;
+  }
+
+  body.is-game-setup .panel-notation .lessons-panel {
+    order: 1;
+  }
+
+  body.is-game-setup .panel-notation .cpu-panel {
+    order: 2;
+  }
+
+  body.is-game-setup .panel-notation .controls-stack {
+    order: 3;
   }
 
   .clock-faces {
@@ -2503,7 +2598,8 @@ textarea {
     width: 100%;
   }
 
-  .board-actions .button {
+  .board-actions .button,
+  .game-actions .button {
     flex: 1 1 auto;
   }
 

@@ -5,11 +5,15 @@
 export const CLOCK_MODES = {
   live: {
     label: 'Live',
-    description: 'Clock follows each completed move. Keeps running while you type.',
+    description: 'Clock follows each completed move. Keeps running while you type. Fixed once the game starts.',
   },
   notation: {
     label: 'Notation pause',
-    description: 'Pauses while typing. Move numbers press the clock for the side to move; edit freely until the next number.',
+    description: 'Pauses while typing. Move numbers press the clock for the side to move. Fixed once the game starts.',
+  },
+  off: {
+    label: 'Off',
+    description: 'No chess clock. Fixed once the game starts. Pause still covers the board.',
   },
 };
 
@@ -75,13 +79,15 @@ export class ChessClock {
       incrementMs: this.incrementMs,
       times: { ...this.times },
       active: this.active,
-      running: this.running && !this.typingPaused && !this.flagged,
+      running: this.mode !== 'off' && this.running && !this.typingPaused && !this.flagged,
       typingPaused: this.typingPaused,
       flagged: this.flagged,
-      display: {
-        white: formatClockMs(this.times.white),
-        black: formatClockMs(this.times.black),
-      },
+      display: this.mode === 'off'
+        ? { white: 'Off', black: 'Off' }
+        : {
+          white: formatClockMs(this.times.white),
+          black: formatClockMs(this.times.black),
+        },
     };
   }
 
@@ -138,7 +144,8 @@ export class ChessClock {
 
   isTicking() {
     return Boolean(
-      this.running
+      this.mode !== 'off'
+      && this.running
       && this.active
       && !this.typingPaused
       && !this.flagged,
@@ -172,7 +179,10 @@ export class ChessClock {
   }
 
   ensureRunning() {
-    if (this.flagged || !this.active) {
+    if (this.mode === 'off' || this.flagged || !this.active) {
+      this.running = false;
+      this.stopLoop();
+      this.emit();
       return;
     }
     this.running = true;
@@ -209,6 +219,13 @@ export class ChessClock {
    * player who just finished, then starts `nextSide`.
    */
   press(nextSide) {
+    if (this.mode === 'off') {
+      this.running = false;
+      this.active = null;
+      this.stopLoop();
+      this.emit();
+      return;
+    }
     if (this.flagged) {
       return;
     }
@@ -230,6 +247,13 @@ export class ChessClock {
    * (e.g. Black to move after White's SAN). No increment.
    */
   setActive(side, { start = true } = {}) {
+    if (this.mode === 'off') {
+      this.running = false;
+      this.active = null;
+      this.stopLoop();
+      this.emit();
+      return;
+    }
     if (this.flagged) {
       return;
     }
