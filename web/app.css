@@ -450,15 +450,16 @@ code {
   order: 0;
 }
 
-.panel-notation .cpu-panel {
-  order: 2;
-}
-
-.panel-notation .lessons-panel {
+/* Moves stay above the coach so turning lessons on does not push the notation off the first screen. */
+.panel-notation .controls-stack {
   order: 1;
 }
 
-.panel-notation .controls-stack {
+.panel-notation .lessons-panel {
+  order: 2;
+}
+
+.panel-notation .cpu-panel {
   order: 3;
 }
 
@@ -1542,6 +1543,15 @@ textarea {
 
 .lessons-panel[data-enabled='true'] #lessons-toggle {
   background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+@media (min-width: 801px) {
+  /* Keep the moves box on the first screen. The tries scroll inside the coach. */
+  .lessons-panel[data-enabled='true'] #lessons-body {
+    max-height: min(42vh, 24rem);
+    overflow: auto;
+    padding-right: 0.15rem;
+  }
 }
 
 .lessons-header {
