@@ -1748,8 +1748,27 @@ textarea {
   border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
 }
 
-.lessons-panel[data-enabled='true'] #lessons-toggle {
+.lessons-agreement {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.lessons-seats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.lessons-seats .button[aria-pressed='true'] {
   background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.lessons-seats .button:disabled {
+  cursor: not-allowed;
+  opacity: 1;
 }
 
 @media (min-width: 801px) {

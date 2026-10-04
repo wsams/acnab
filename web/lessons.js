@@ -20,6 +20,153 @@ import {
 
 const STORAGE_ENABLED = 'acnab:lessons';
 const STORAGE_DEPTH = 'acnab:lessons-depth';
+const STORAGE_WHITE = 'acnab:lessons-white';
+const STORAGE_BLACK = 'acnab:lessons-black';
+const STORAGE_SELF = 'acnab:lessons-self';
+
+function emptySeats() {
+  return { white: false, black: false };
+}
+
+function sameSans(left, right) {
+  return left.length === right.length && left.every((san, index) => san === right[index]);
+}
+
+function extendsByOne(previous, next) {
+  return next.length === previous.length + 1
+    && previous.every((san, index) => san === next[index]);
+}
+
+function rewindsByOne(previous, next) {
+  return next.length === previous.length - 1
+    && next.every((san, index) => san === previous[index]);
+}
+
+/**
+ * Coaching is chosen while the board is still the start position.
+ * The first ply freezes that choice. A jump straight into a played game
+ * (a save, a share, a paste) does not carry a coach.
+ */
+export function advanceCoaching(state, ctx, enrollment) {
+  const sans = Array.isArray(ctx?.sans) ? ctx.sans : [];
+  const previous = state?.phase
+    ? state
+    : { phase: 'setup', enrolled: emptySeats(), sans: [] };
+
+  if (!ctx?.live) {
+    return {
+      phase: previous.phase,
+      enrolled: previous.enrolled || emptySeats(),
+      sans: previous.sans || [],
+    };
+  }
+  if (sans.length === 0) {
+    if (ctx.offerCoaching) {
+      return { phase: 'setup', enrolled: emptySeats(), sans: [] };
+    }
+    if (previous.phase === 'playing') {
+      return {
+        phase: 'playing',
+        enrolled: previous.enrolled || emptySeats(),
+        sans: [],
+      };
+    }
+    return { phase: 'studying', enrolled: emptySeats(), sans: previous.sans || [] };
+  }
+  if (previous.phase === 'setup') {
+    if (sans.length === 1) {
+      return {
+        phase: 'playing',
+        enrolled: {
+          white: Boolean(enrollment?.white),
+          black: Boolean(enrollment?.black),
+        },
+        sans: sans.slice(),
+      };
+    }
+    return { phase: 'studying', enrolled: emptySeats(), sans: sans.slice() };
+  }
+  if (previous.phase === 'playing') {
+    const prior = previous.sans || [];
+    if (sameSans(prior, sans) || extendsByOne(prior, sans) || rewindsByOne(prior, sans)) {
+      return {
+        phase: 'playing',
+        enrolled: previous.enrolled || emptySeats(),
+        sans: sans.slice(),
+      };
+    }
+    return { phase: 'studying', enrolled: emptySeats(), sans: sans.slice() };
+  }
+  return { phase: 'studying', enrolled: emptySeats(), sans: sans.slice() };
+}
+
+export function liveEnrollment(ctx, prefs, selfCoach) {
+  if (ctx?.cpu?.enabled) {
+    const human = ctx.cpu.humanSide;
+    if (human === 'white' || human === 'black') {
+      return {
+        white: human === 'white' && Boolean(selfCoach),
+        black: human === 'black' && Boolean(selfCoach),
+      };
+    }
+    return emptySeats();
+  }
+  return {
+    white: Boolean(prefs?.white),
+    black: Boolean(prefs?.black),
+  };
+}
+
+export function coachAdvises(enrolled, ctx) {
+  if (!enrolled || ctx?.isGameOver) {
+    return false;
+  }
+  if (ctx?.cpu?.enabled) {
+    const human = ctx.cpu.humanSide;
+    return Boolean(human && enrolled[human]);
+  }
+  const turn = ctx?.turn === 'black' ? 'black' : 'white';
+  return Boolean(enrolled[turn]);
+}
+
+export function agreementText({ phase, enrolled, cpu, sideNames }) {
+  const white = sideNames?.white || 'White';
+  const black = sideNames?.black || 'Black';
+  if (phase === 'studying') {
+    return 'This board already has moves. Coaching is chosen on a new board, before the first move, so both players can see it.';
+  }
+  if (phase === 'setup') {
+    if (cpu?.enabled) {
+      if (cpu.tossing) {
+        return 'Tossing for colors. Turn your coach on or off before the first move. That choice stays on the board for the match.';
+      }
+      if (cpu.humanSide === 'white' || cpu.humanSide === 'black') {
+        const you = cpu.humanSide === 'black' ? black : white;
+        return `You have ${you}. Turn your coach on or off before the first move. The choice stays on the board once the match starts.`;
+      }
+      return 'Turn your coach on before the first move. The choice stays on the board for the whole match.';
+    }
+    return `Before the first move, ${white} and ${black} each choose a coach. Both players can see the choice. It cannot be turned on after the game starts.`;
+  }
+  if (cpu?.enabled) {
+    const human = cpu.humanSide;
+    const on = human && enrolled?.[human];
+    return on
+      ? 'You are using the coach this match. That was set before the first move.'
+      : 'You are playing this match without a coach. That was set before the first move.';
+  }
+  const whiteOn = Boolean(enrolled?.white);
+  const blackOn = Boolean(enrolled?.black);
+  if (whiteOn && blackOn) {
+    return `${white} and ${black} are both using the coach. Tries show for the side to move. Both players can see this.`;
+  }
+  if (!whiteOn && !blackOn) {
+    return 'Neither player is using the coach. That was set before the first move.';
+  }
+  const using = whiteOn ? white : black;
+  const plain = whiteOn ? black : white;
+  return `${using} is using the coach. ${plain} is not. Both players can see this. It was set before the first move.`;
+}
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, (character) => ({
@@ -31,14 +178,6 @@ function escapeHtml(value) {
   }[character]));
 }
 
-function readEnabled() {
-  try {
-    return localStorage.getItem(STORAGE_ENABLED) === '1';
-  } catch {
-    return false;
-  }
-}
-
 function readDepth() {
   try {
     return resolveLessonDepth(localStorage.getItem(STORAGE_DEPTH));
@@ -47,22 +186,26 @@ function readDepth() {
   }
 }
 
-function studentToMove(ctx) {
-  if (!ctx?.cpu?.enabled || !ctx.cpu.humanSide) {
-    return true;
+function studentToMove(ctx, enrolled) {
+  if (!coachAdvises(enrolled, ctx)) {
+    return false;
   }
-  return ctx.turn === ctx.cpu.humanSide;
+  if (ctx?.cpu?.enabled && ctx.cpu.humanSide) {
+    return ctx.turn === ctx.cpu.humanSide;
+  }
+  return true;
 }
 
 function actorName(move, ctx) {
-  const color = move?.color;
+  const color = move?.color === 'black' ? 'black' : 'white';
+  const names = ctx?.sideNames || { white: 'White', black: 'Black' };
   if (ctx?.cpu?.enabled && ctx.cpu.cpuSide && color === ctx.cpu.cpuSide) {
     return 'The CPU';
   }
-  if (!ctx?.cpu?.enabled || (ctx.cpu.humanSide && color === ctx.cpu.humanSide)) {
+  if (ctx?.cpu?.enabled && ctx.cpu.humanSide && color === ctx.cpu.humanSide) {
     return 'You';
   }
-  return color === 'white' ? 'White' : 'Black';
+  return names[color];
 }
 
 function gameOverCopy(ctx) {
@@ -105,10 +248,51 @@ function formatLine(fen, sans, cursor) {
   }).join(' ');
 }
 
+function readFlag(key, fallback) {
+  try {
+    const value = localStorage.getItem(key);
+    if (value === '1') {
+      return true;
+    }
+    if (value === '0') {
+      return false;
+    }
+  } catch {
+    // Ignore storage failures and use the fallback.
+  }
+  return fallback;
+}
+
+function writeFlag(key, on) {
+  try {
+    localStorage.setItem(key, on ? '1' : '0');
+    localStorage.removeItem(STORAGE_ENABLED);
+  } catch {
+    // The choice still applies for this visit.
+  }
+}
+
+function readCoachPrefs() {
+  let legacy = false;
+  try {
+    legacy = localStorage.getItem(STORAGE_ENABLED) === '1';
+  } catch {
+    legacy = false;
+  }
+  return {
+    white: readFlag(STORAGE_WHITE, legacy),
+    black: readFlag(STORAGE_BLACK, legacy),
+    selfCoach: readFlag(STORAGE_SELF, legacy),
+  };
+}
+
 export function mountLessonPortal({ onPreview, onClearPreview, onPlayMove, getContext }) {
   const panel = document.querySelector('#lessons-panel');
-  const toggle = document.querySelector('#lessons-toggle');
   const intro = document.querySelector('#lessons-intro');
+  const agreement = document.querySelector('#lessons-agreement');
+  const seatWhite = document.querySelector('#lessons-seat-white');
+  const seatBlack = document.querySelector('#lessons-seat-black');
+  const seatSelf = document.querySelector('#lessons-seat-self');
   const body = document.querySelector('#lessons-body');
   const depthRow = document.querySelector('#lessons-depth');
   const depthHint = document.querySelector('#lessons-depth-hint');
@@ -117,10 +301,13 @@ export function mountLessonPortal({ onPreview, onClearPreview, onPlayMove, getCo
   const previewBox = document.querySelector('#lessons-preview');
   const options = document.querySelector('#lessons-options');
   const engine = new CoachEngine();
+  const stored = readCoachPrefs();
 
   const portal = {
-    enabled: readEnabled(),
+    prefs: { white: stored.white, black: stored.black },
+    selfCoach: stored.selfCoach,
     depthId: readDepth(),
+    phaseState: { phase: 'setup', enrolled: emptySeats(), sans: [] },
     token: 0,
     seenFen: null,
     brief: null,
@@ -136,6 +323,31 @@ export function mountLessonPortal({ onPreview, onClearPreview, onPlayMove, getCo
     if (status && status.textContent !== text) {
       status.textContent = text;
     }
+  }
+
+  function enrollmentFor(ctx) {
+    if (portal.phaseState.phase === 'setup') {
+      return liveEnrollment(ctx, portal.prefs, portal.selfCoach);
+    }
+    return portal.phaseState.enrolled || emptySeats();
+  }
+
+  function sideLabel(ctx, color) {
+    const names = ctx?.sideNames || { white: 'White', black: 'Black' };
+    return color === 'black' ? names.black : names.white;
+  }
+
+  function paintSeat(button, { pressed, label, visible, locked }) {
+    if (!button) {
+      return;
+    }
+    button.hidden = !visible;
+    button.disabled = locked;
+    button.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+    button.textContent = label;
+    button.title = locked
+      ? 'Coaching is chosen before the first move.'
+      : 'Both players can see this choice.';
   }
 
   function stopWatch() {
@@ -237,8 +449,11 @@ export function mountLessonPortal({ onPreview, onClearPreview, onPlayMove, getCo
 
   async function playSan(san) {
     const ctx = getContext?.();
-    if (!ctx || !studentToMove(ctx)) {
-      setStatus('The CPU is to move. The coach can show the idea, and you play on your own turn.');
+    const enrolled = enrollmentFor(ctx || {});
+    if (!ctx || !studentToMove(ctx, enrolled)) {
+      setStatus(ctx?.cpu?.enabled
+        ? 'The CPU is to move. The coach can show the idea, and you play on your own turn.'
+        : 'The coach writes a move only for the side that chose it, and only on that side’s turn.');
       return;
     }
     exitPreview({ restore: false });
@@ -295,14 +510,18 @@ export function mountLessonPortal({ onPreview, onClearPreview, onPlayMove, getCo
     return null;
   }
 
-  function renderDepth() {
+  function renderDepth(locked) {
     const current = LESSON_DEPTHS[portal.depthId];
     depthRow?.querySelectorAll('[data-depth]').forEach((button) => {
       const on = button.dataset.depth === portal.depthId;
       button.setAttribute('aria-pressed', on ? 'true' : 'false');
+      button.disabled = locked;
     });
     if (depthHint) {
-      depthHint.textContent = current?.description ?? '';
+      const description = current?.description ?? '';
+      depthHint.textContent = locked
+        ? `${description} Depth stays as it was before the first move.`
+        : description;
     }
   }
 
@@ -316,7 +535,7 @@ export function mountLessonPortal({ onPreview, onClearPreview, onPlayMove, getCo
       previewBox.innerHTML = '';
       return;
     }
-    const allowPlay = studentToMove(ctx);
+    const allowPlay = studentToMove(ctx, enrollmentFor(ctx));
     preview.allowPlay = allowPlay;
     previewBox.hidden = false;
     previewBox.innerHTML = `
@@ -335,7 +554,9 @@ export function mountLessonPortal({ onPreview, onClearPreview, onPlayMove, getCo
         <button type="button" class="button ghost" data-act="back">Back to the game</button>
         ${allowPlay
           ? `<button type="button" class="button primary" data-act="play">Play ${escapeHtml(preview.playSan)}</button>`
-          : '<p class="lessons-wait">The CPU is to move. Watch the idea, then answer on your turn.</p>'}
+          : `<p class="lessons-wait">${escapeHtml(ctx?.cpu?.enabled
+            ? 'The CPU is to move. Watch the idea, then answer on your turn.'
+            : 'This preview is for the side that chose the coach.')}</p>`}
       </div>
     `;
   }
@@ -355,13 +576,17 @@ export function mountLessonPortal({ onPreview, onClearPreview, onPlayMove, getCo
       options.innerHTML = '';
       return;
     }
-    const yours = studentToMove(ctx);
-    const heading = yours
-      ? 'Tries for you'
-      : 'What the coach would play for the CPU';
-    const note = yours
-      ? 'Preview any try. The board shows the line and the notation stays put until you press Play or make your own move.'
-      : 'The CPU may choose something else. Preview a line to see why the coach likes it. These moves are not yours to play.';
+    const enrolled = enrollmentFor(ctx);
+    const yours = studentToMove(ctx, enrolled);
+    const turnName = sideLabel(ctx, ctx.turn === 'black' ? 'black' : 'white');
+    const heading = ctx.cpu?.enabled
+      ? (yours ? 'Tries for you' : 'What the coach would play for the CPU')
+      : `Tries for ${turnName}`;
+    const note = ctx.cpu?.enabled
+      ? (yours
+        ? 'Preview any try. The board shows the line and the notation stays put until you press Play or make your own move.'
+        : 'The CPU may choose something else. Preview a line to see why the coach likes it. These moves are not yours to play.')
+      : 'Both players can see that this side is using the coach. Preview a line, then press Play or move the piece yourself. The notation stays put until then.';
     options.hidden = false;
     options.innerHTML = `
       <li class="lessons-options-intro">
@@ -390,31 +615,71 @@ export function mountLessonPortal({ onPreview, onClearPreview, onPlayMove, getCo
     `;
   }
 
-  function render() {
-    const ctx = getContext?.() || {};
-    panel?.setAttribute('data-enabled', portal.enabled ? 'true' : 'false');
+  function render(ctx = getContext?.() || {}) {
+    const phase = portal.phaseState.phase;
+    const enrolled = enrollmentFor(ctx);
+    const advising = Boolean(ctx.live) && coachAdvises(enrolled, ctx);
+    const showBody = advising;
+    const cpuOn = Boolean(ctx.cpu?.enabled);
+    const locked = phase !== 'setup';
+    panel?.setAttribute('data-enabled', showBody ? 'true' : 'false');
+    panel?.setAttribute('data-phase', phase);
     panel?.classList.toggle('is-thinking', Boolean(portal.analyzingFen));
     panel?.classList.toggle('is-preview', Boolean(portal.preview));
-    if (toggle) {
-      toggle.setAttribute('aria-pressed', portal.enabled ? 'true' : 'false');
-      toggle.textContent = portal.enabled ? 'Lessons on' : 'Lessons off';
+    if (agreement) {
+      let text = agreementText({
+        phase,
+        enrolled,
+        cpu: ctx.cpu,
+        sideNames: ctx.sideNames,
+      });
+      if (phase === 'playing' && ctx.live === false) {
+        text = `${text} Lessons follow the live board. Go to the last move to keep the lesson going.`;
+      }
+      agreement.textContent = text;
     }
     if (intro) {
-      intro.hidden = portal.enabled;
+      intro.hidden = phase !== 'setup';
     }
+    const whiteName = sideLabel(ctx, 'white');
+    const blackName = sideLabel(ctx, 'black');
+    paintSeat(seatWhite, {
+      visible: !cpuOn,
+      locked,
+      pressed: enrolled.white,
+      label: `${whiteName}: coach ${enrolled.white ? 'on' : 'off'}`,
+    });
+    paintSeat(seatBlack, {
+      visible: !cpuOn,
+      locked,
+      pressed: enrolled.black,
+      label: `${blackName}: coach ${enrolled.black ? 'on' : 'off'}`,
+    });
+    const selfOn = Boolean(ctx.cpu?.humanSide
+      ? enrolled[ctx.cpu.humanSide]
+      : portal.selfCoach);
+    const selfName = ctx.cpu?.humanSide ? sideLabel(ctx, ctx.cpu.humanSide) : '';
+    paintSeat(seatSelf, {
+      visible: cpuOn,
+      locked,
+      pressed: selfOn,
+      label: selfName
+        ? `Your coach: ${selfOn ? 'on' : 'off'} · ${selfName}`
+        : `Your coach: ${selfOn ? 'on' : 'off'}`,
+    });
     if (body) {
-      body.hidden = !portal.enabled;
+      body.hidden = !showBody;
     }
-    if (!portal.enabled) {
-      return;
-    }
-    renderDepth();
     if (decision) {
       decision.hidden = !portal.decision;
       decision.innerHTML = portal.decision
         ? `<p class="lessons-kicker">What just happened</p><h3>${escapeHtml(portal.decision.title)}</h3><p>${escapeHtml(portal.decision.body)}</p>`
         : '';
     }
+    if (!showBody) {
+      return;
+    }
+    renderDepth(locked);
     renderPreviewBox(ctx);
     renderOptions(ctx);
   }
@@ -424,10 +689,13 @@ export function mountLessonPortal({ onPreview, onClearPreview, onPlayMove, getCo
     portal.token = token;
     const depth = LESSON_DEPTHS[portal.depthId];
     portal.analyzingFen = ctx.fen;
-    const yours = studentToMove(ctx);
-    setStatus(yours
-      ? 'Coach is reading your position…'
-      : 'Coach is reading the position while the CPU thinks…');
+    const yours = studentToMove(ctx, enrollmentFor(ctx));
+    const turnName = sideLabel(ctx, ctx.turn === 'black' ? 'black' : 'white');
+    setStatus(ctx.cpu?.enabled
+      ? (yours
+        ? 'Coach is reading your position…'
+        : 'Coach is reading the position while the CPU thinks…')
+      : `Coach is reading the position for ${turnName}…`);
     render();
     try {
       const entries = await engine.analyze(ctx.fen, depth);
@@ -435,7 +703,7 @@ export function mountLessonPortal({ onPreview, onClearPreview, onPlayMove, getCo
         return;
       }
       const latest = getContext?.();
-      if (!latest || latest.fen !== ctx.fen || !portal.enabled) {
+      if (!latest || latest.fen !== ctx.fen || !coachAdvises(enrollmentFor(latest), latest)) {
         return;
       }
       const multipv = entries.slice(0, depth.multipv);
@@ -467,51 +735,75 @@ export function mountLessonPortal({ onPreview, onClearPreview, onPlayMove, getCo
     }
   }
 
+  function haltSearch() {
+    engine.stop();
+    portal.analyzingFen = null;
+    portal.token += 1;
+  }
+
   function sync(ctx) {
-    if (!portal.enabled || !ctx?.fen) {
+    if (!ctx?.fen) {
+      render(ctx || {});
       return;
     }
-    if (ctx.cpu?.tossing) {
-      engine.stop();
-      portal.analyzingFen = null;
-      portal.token += 1;
-      setStatus('Tossing for colors. The lesson starts as soon as the sides are set.');
-      render();
+    const offered = portal.phaseState.phase === 'setup'
+      ? liveEnrollment(ctx, portal.prefs, portal.selfCoach)
+      : portal.phaseState.enrolled;
+    const nextPhase = advanceCoaching(portal.phaseState, ctx, offered);
+    const enteredStudy = nextPhase.phase === 'studying' && portal.phaseState.phase !== 'studying';
+    portal.phaseState = nextPhase;
+
+    if (enteredStudy) {
+      haltSearch();
+      portal.forecast = null;
+      portal.brief = null;
+      portal.decision = null;
+      portal.seenFen = ctx.fen;
+      if (portal.preview) {
+        exitPreview({ restore: true });
+      }
+      setStatus('');
+      render(ctx);
       return;
     }
+
     if (!ctx.live) {
-      engine.stop();
-      portal.analyzingFen = null;
-      portal.token += 1;
+      haltSearch();
       if (portal.preview) {
         exitPreview({ restore: false });
       }
       setStatus('Lessons follow the live board. Go to the last move to keep the lesson going.');
-      render();
+      render(ctx);
       return;
     }
-    if (ctx.isGameOver) {
-      engine.stop();
-      portal.analyzingFen = null;
-      portal.token += 1;
-      if (portal.preview && portal.preview.anchorFen !== ctx.fen) {
-        exitPreview({ restore: false });
+
+    const enrolled = enrollmentFor(ctx);
+    const advising = coachAdvises(enrolled, ctx);
+
+    if (ctx.fen !== portal.seenFen) {
+      const previousFen = portal.seenFen;
+      portal.decision = previousFen && ctx.sans?.length && nextPhase.phase === 'playing'
+        ? explainTransition(previousFen, ctx)
+        : null;
+      portal.seenFen = ctx.fen;
+    }
+
+    if (ctx.cpu?.tossing || ctx.isGameOver || !advising) {
+      haltSearch();
+      if (portal.preview) {
+        exitPreview({ restore: ctx.cpu?.tossing || !advising });
       }
-      setStatus(gameOverCopy(ctx));
-      render();
+      if (ctx.isGameOver) {
+        setStatus(gameOverCopy(ctx));
+      } else {
+        setStatus('');
+      }
+      render(ctx);
       return;
     }
 
     if (portal.preview && portal.preview.anchorFen !== ctx.fen) {
       exitPreview({ restore: false });
-    }
-
-    if (ctx.fen !== portal.seenFen) {
-      const previousFen = portal.seenFen;
-      portal.decision = previousFen && ctx.sans?.length
-        ? explainTransition(previousFen, ctx)
-        : null;
-      portal.seenFen = ctx.fen;
     }
 
     if (portal.preview && portal.preview.anchorFen === ctx.fen) {
@@ -526,45 +818,51 @@ export function mountLessonPortal({ onPreview, onClearPreview, onPlayMove, getCo
         const depthText = portal.brief.depth ? `depth ${portal.brief.depth}` : depth.label;
         setStatus(`${depth.label} · ${depthText} · ${best.evalLabel} from White’s side. ${best.evalCaption}`);
       }
-      render();
+      render(ctx);
       return;
     }
 
     if (portal.analyzingFen === ctx.fen) {
-      render();
+      render(ctx);
       return;
     }
 
     startAnalysis(ctx);
   }
 
-  function setEnabled(enabled) {
-    portal.enabled = Boolean(enabled);
-    try {
-      localStorage.setItem(STORAGE_ENABLED, portal.enabled ? '1' : '0');
-    } catch {
-      // Ignore storage failures. The lesson still runs for this visit.
-    }
-    if (!portal.enabled) {
-      portal.token += 1;
-      engine.stop();
-      portal.analyzingFen = null;
-      portal.seenFen = null;
-      portal.forecast = null;
-      exitPreview({ restore: true });
-      portal.decision = null;
-      setStatus('');
-      render();
+  function setSeat(seat) {
+    if (portal.phaseState.phase !== 'setup') {
       return;
     }
-    render();
+    if (seat === 'self') {
+      portal.selfCoach = !portal.selfCoach;
+      writeFlag(STORAGE_SELF, portal.selfCoach);
+    } else if (seat === 'white' || seat === 'black') {
+      portal.prefs[seat] = !portal.prefs[seat];
+      writeFlag(seat === 'white' ? STORAGE_WHITE : STORAGE_BLACK, portal.prefs[seat]);
+    } else {
+      return;
+    }
+    haltSearch();
+    portal.brief = null;
+    portal.seenFen = null;
+    portal.forecast = null;
+    portal.decision = null;
+    if (portal.preview) {
+      exitPreview({ restore: true });
+    }
     const ctx = getContext?.();
     if (ctx) {
       sync(ctx);
+    } else {
+      render({});
     }
   }
 
   function setDepth(depthId) {
+    if (portal.phaseState.phase !== 'setup') {
+      return;
+    }
     const next = resolveLessonDepth(depthId);
     if (next === portal.depthId) {
       return;
@@ -576,18 +874,23 @@ export function mountLessonPortal({ onPreview, onClearPreview, onPlayMove, getCo
       // ignore
     }
     portal.brief = null;
+    portal.analyzingFen = null;
     if (portal.preview) {
       exitPreview({ restore: true });
     }
-    renderDepth();
     const ctx = getContext?.();
-    if (portal.enabled && ctx) {
-      portal.analyzingFen = null;
+    if (ctx) {
       sync(ctx);
     }
   }
 
-  toggle?.addEventListener('click', () => setEnabled(!portal.enabled));
+  document.querySelector('#lessons-seats')?.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-seat]');
+    if (!(button instanceof HTMLElement) || !button.dataset.seat) {
+      return;
+    }
+    setSeat(button.dataset.seat);
+  });
   depthRow?.addEventListener('click', (event) => {
     const button = event.target.closest('[data-depth]');
     if (!(button instanceof HTMLElement) || !button.dataset.depth) {
@@ -646,17 +949,20 @@ export function mountLessonPortal({ onPreview, onClearPreview, onPlayMove, getCo
     }
   });
 
-  render();
-  if (portal.enabled) {
-    const ctx = getContext?.();
-    if (ctx?.fen) {
-      sync(ctx);
-    }
+  const ctx = getContext?.();
+  if (ctx?.fen) {
+    sync(ctx);
+  } else {
+    render();
   }
 
   return {
     sync,
-    isEnabled: () => portal.enabled,
+    isEnabled: () => {
+      const latest = getContext?.() || {};
+      const enrolled = enrollmentFor(latest);
+      return Boolean(enrolled.white || enrolled.black);
+    },
     isPreviewing: () => Boolean(portal.preview),
     exitPreview: () => {
       if (!portal.preview) {

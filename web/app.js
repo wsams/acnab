@@ -157,6 +157,7 @@ const state = {
     paceTargetMs: null,
   },
   lessonPreview: null,
+  offerCoaching: true,
 };
 
 const stockfish = new StockfishCpu();
@@ -406,6 +407,7 @@ function paintCpuUi() {
     if (elements.coinCaption) {
       elements.coinCaption.textContent = 'Heads: you play White. Tails: CPU plays White.';
     }
+    notifyLessons();
     return;
   }
 
@@ -413,6 +415,7 @@ function paintCpuUi() {
     if (elements.cpuStatus) {
       elements.cpuStatus.textContent = 'Start a match to toss for sides.';
     }
+    notifyLessons();
     return;
   }
 
@@ -425,11 +428,13 @@ function paintCpuUi() {
     } else {
       elements.cpuStatus.textContent = `Stockfish (${level.label}) is thinking…`;
     }
+    notifyLessons();
     return;
   }
 
   if (state.game?.isGameOver) {
     elements.cpuStatus.textContent = `Match over · you are ${sideLabel(humanSide)}. ${state.game.status}`;
+    notifyLessons();
     return;
   }
 
@@ -599,6 +604,7 @@ async function startCpuMatch({ announceEngine = true } = {}) {
   elements.moves.value = '';
   elements.saveName.value = '';
   state.clockMoveSig = '';
+  state.offerCoaching = true;
   clock.reset();
   updateBoard('', false, { skipCpu: true });
 
@@ -1938,6 +1944,7 @@ async function openSharedGame(moves, {
   feedback = 'Playing shared game…',
 } = {}) {
   const text = String(moves ?? '');
+  state.offerCoaching = !text.trim();
   elements.moves.value = text;
   state.draft = text;
   localStorage.setItem(STORAGE_KEYS.draft, text);
@@ -2049,6 +2056,7 @@ function resetBoard() {
   elements.moves.value = '';
   elements.saveName.value = '';
   state.clockMoveSig = '';
+  state.offerCoaching = true;
   clock.reset();
   updateBoard('', true);
 }
@@ -2427,8 +2435,10 @@ function lessonContext() {
     isCheckmate: Boolean(liveGame?.isCheckmate),
     turn: liveGame?.turn,
     sans: liveGame?.appliedMoves ?? [],
+    sideNames: getPaletteSideNames(state.piecePalette),
     lastMove,
     live: isViewingLive(),
+    offerCoaching: state.offerCoaching,
     cpu: {
       enabled: state.cpu.enabled,
       thinking: state.cpu.thinking,
@@ -2440,10 +2450,7 @@ function lessonContext() {
 }
 
 function notifyLessons() {
-  if (!lessons?.isEnabled()) {
-    return;
-  }
-  lessons.sync(lessonContext());
+  lessons?.sync(lessonContext());
 }
 
 function showLessonPreview(payload) {
@@ -2665,6 +2672,7 @@ function bindEvents() {
         return;
       }
       elements.saveName.value = game.name;
+      state.offerCoaching = !String(game.moves || '').trim();
       elements.moves.value = game.moves;
       updateBoard(game.moves, true);
       return;
@@ -2695,6 +2703,7 @@ function bootstrap() {
 
   const sharedMoves = loadMovesFromShareLocation();
   const initialMoves = sharedMoves != null ? sharedMoves : state.draft;
+  state.offerCoaching = !String(initialMoves || '').trim();
   elements.moves.value = initialMoves;
   if (sharedMoves != null) {
     state.draft = sharedMoves;

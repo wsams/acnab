@@ -112,25 +112,23 @@
     <section class="panel panel-notation" id="notation-dock">
       <div class="notation-dock-handle" aria-hidden="true"></div>
 
-      <section class="lessons-panel" id="lessons-panel" data-enabled="false" aria-label="Chess lessons">
+      <section class="lessons-panel" id="lessons-panel" data-enabled="false" data-phase="setup" aria-label="Chess lessons">
         <div class="lessons-header">
           <div>
             <p class="eyebrow">Student portal</p>
             <h2 class="lessons-title">Lessons</h2>
           </div>
-          <button
-            id="lessons-toggle"
-            type="button"
-            class="button ghost"
-            aria-pressed="false"
-            title="A second engine explains moves and never plays them"
-          >
-            Lessons off
-          </button>
+        </div>
+        <p id="lessons-agreement" class="lessons-agreement" role="status"></p>
+        <div id="lessons-seats" class="lessons-seats" role="group" aria-label="Who is using the coach">
+          <button type="button" class="button ghost" id="lessons-seat-white" data-seat="white" aria-pressed="false">White: coach off</button>
+          <button type="button" class="button ghost" id="lessons-seat-black" data-seat="black" aria-pressed="false">Black: coach off</button>
+          <button type="button" class="button ghost" id="lessons-seat-self" data-seat="self" hidden aria-pressed="false">Your coach: off</button>
         </div>
         <p id="lessons-intro" class="lessons-intro">
-          A second engine that never moves a piece. It explains tries in real chess terms — pins, outposts, pawn breaks, opposition — and lets you preview the line. Free in this browser: no account, no ads, no tracking.
+          Two players each choose a coach before the first move. The buttons stay on the board so both of you can see who has one, and they lock once the game starts. Against the CPU, choose your own coach before the match starts. The coach never moves a piece. Free in this browser: no account, no ads, no tracking.
         </p>
+        <div id="lessons-decision" class="lessons-decision" hidden></div>
         <div id="lessons-body" hidden>
           <div class="lessons-depth" id="lessons-depth" role="group" aria-label="Coach depth">
             <button type="button" class="button ghost small" data-depth="glance" aria-pressed="false">Glance</button>
@@ -139,7 +137,6 @@
           </div>
           <p id="lessons-depth-hint" class="lessons-depth-hint"></p>
           <p id="lessons-status" class="lessons-status" role="status"></p>
-          <div id="lessons-decision" class="lessons-decision" hidden></div>
           <div id="lessons-preview" class="lessons-preview" hidden></div>
           <ol id="lessons-options" class="lessons-options"></ol>
         </div>
@@ -323,7 +320,7 @@
           <li><strong>Play controls</strong> under the board step through or autoplay the game; pieces glide into place (also during live notation updates).</li>
           <li><strong>Check, checkmate, and turn</strong> stay on the board. The side to move is named above the squares, with a colored bar on that side’s edge. Check lights the king; checkmate stamps the result across the board.</li>
           <li><strong>CPU player</strong> (off by default): toss a coin for White, then type or click your moves — Stockfish replies automatically. Strength from Intermediate upward is Stockfish’s own UCI Elo (1320–2500). Beginner and Casual are approximate: they play the 1320 engine and replace some moves with a random legal move, because Stockfish cannot aim below 1320. Maximum is uncapped lite Stockfish. <strong>Pace</strong> (on by default) makes the CPU take about your average think time so the clocks stay even; turn it off to reply as soon as the search finishes.</li>
-          <li><strong>Lessons</strong> (off by default): a second Stockfish that never plays. It offers a few tries, explains them with chess ideas (development, pins, outposts, pawn breaks, opposition), and lets you preview the line on the board. Press <strong>Play</strong> only when you want that move written into the game. After your move, and after the CPU replies, the coach reads the new position. Glance, Study, and Master class change how long it thinks. Everything stays in this browser.</li>
+          <li><strong>Lessons</strong> (off by default): a second Stockfish that never plays. With two players, each side turns a coach on before the first move. Both players see who has one, and it cannot be turned on after the game starts. Against the CPU, choose your coach before the match starts. The coach explains tries with chess ideas (development, pins, outposts, pawn breaks, opposition) and lets you preview the line. Press <strong>Play</strong> only when you want that move written into the game. Glance, Study, and Master class are chosen with the coach, before the first move. Everything stays in this browser.</li>
         </ul>
       </details>
     </section>
