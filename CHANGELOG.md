@@ -1,3 +1,10 @@
+# [1.9.0](https://github.com/wsams/acnab/compare/v1.8.0...v1.9.0) (2026-10-03)
+
+
+### Features
+
+* show check, mate, and the side to move on the board ([#15](https://github.com/wsams/acnab/issues/15)) ([9a0a6f1](https://github.com/wsams/acnab/commit/9a0a6f1b0d8c1011537850856294b50b2c62848a))
+
 # [1.8.0](https://github.com/wsams/acnab/compare/v1.7.1...v1.8.0) (2026-10-03)
 
 
