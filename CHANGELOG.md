@@ -1,3 +1,10 @@
+# [1.10.0](https://github.com/wsams/acnab/compare/v1.9.0...v1.10.0) (2026-10-05)
+
+
+### Features
+
+* start games only after an explicit Start game ([#17](https://github.com/wsams/acnab/issues/17)) ([a16e2af](https://github.com/wsams/acnab/commit/a16e2af831850686371744573332d5deb7e125b9))
+
 # [1.9.0](https://github.com/wsams/acnab/compare/v1.8.0...v1.9.0) (2026-10-03)
 
 
